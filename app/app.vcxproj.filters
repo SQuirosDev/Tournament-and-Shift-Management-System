@@ -70,6 +70,15 @@
     <ClCompile Include="validations.cpp">
       <Filter>Source Files\utils</Filter>
     </ClCompile>
+    <ClCompile Include="logPetition.cpp">
+      <Filter>Source Files\logics</Filter>
+    </ClCompile>
+    <ClCompile Include="factories.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="helpers.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -119,6 +128,30 @@
     </ClInclude>
     <ClInclude Include="validations.h">
       <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="queue.h">
+      <Filter>Source Files\data</Filter>
+    </ClInclude>
+    <ClInclude Include="stack.h">
+      <Filter>Source Files\data</Filter>
+    </ClInclude>
+    <ClInclude Include="dbResponse.h">
+      <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="backendResponse.h">
+      <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="factories.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="helpers.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="dbQueryResponse.h">
+      <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="backendQueryResponse.h">
+      <Filter>Source Files\models</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

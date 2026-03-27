@@ -98,6 +98,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="connection.cpp" />
+    <ClCompile Include="factories.cpp" />
+    <ClCompile Include="helpers.cpp" />
+    <ClCompile Include="logPetition.cpp" />
     <ClCompile Include="logPlayer.cpp" />
     <ClCompile Include="sqlite3.c" />
     <ClCompile Include="validations.cpp" />
@@ -108,6 +111,11 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="backendQueryResponse.h" />
+    <ClInclude Include="backendResponse.h" />
+    <ClInclude Include="dbResponse.h" />
+    <ClInclude Include="factories.h" />
+    <ClInclude Include="helpers.h" />
     <ClInclude Include="historics.h" />
     <ClInclude Include="codes.h" />
     <ClInclude Include="connection.h" />
@@ -120,7 +128,10 @@
     <ClInclude Include="matches.h" />
     <ClInclude Include="petitions.h" />
     <ClInclude Include="players.h" />
+    <ClInclude Include="dbQueryResponse.h" />
+    <ClInclude Include="queue.h" />
     <ClInclude Include="sqlite3.h" />
+    <ClInclude Include="stack.h" />
     <ClInclude Include="teams.h" />
     <ClInclude Include="tournaments.h" />
     <ClInclude Include="validations.h" />
