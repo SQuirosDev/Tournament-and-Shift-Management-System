@@ -4,7 +4,4 @@
 
 using namespace std;
 
-class Validations {
-public:
-	bool isValidName(const string& name);
-};
+bool isValidName(const string& name);

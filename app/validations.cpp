@@ -1,6 +1,6 @@
 #include "validations.h"
 
-bool Validations::isValidName(const string& name) {
+bool isValidName(const string& name) {
     if (name.empty()) {
         return false;
     }
