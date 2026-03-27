@@ -1,47 +1,58 @@
 #include "logPlayer.h"
 #include "validations.h"
+#include "factories.h"
 
 LogPlayer::LogPlayer(Connection& dbConnection) : connection_(dbConnection) {}
 
-DbResponse LogPlayer::registerPlayer(int teamId, const string& playerName) {
-    Validations Validation;
+BackendResponse LogPlayer::registerPlayer(int teamId, string playerName) {
+
     if (teamId <= 0) {
         return { -1, 400, "El ID del equipo no es válido." };
     }
-    if (!Validation.isValidName(playerName)) {
-        return { -1, 400, "El nombre del jugador no puede estar vacío." };
+
+    if (!isValidName(playerName)) {
+        return { 0, 400, "El nombre del jugador no puede estar vacío." };
     }
-    return connection_.insertPlayer(playerName, teamId);
+
+    return dbResponseFactory(connection_.insertPlayer(playerName, teamId));
 }
 
-DbResponse LogPlayer::listPlayersByTeam(int teamId, vector<Player>& outputList) {
+BackendQueryResponse<Player> LogPlayer::listPlayersByTeam(int teamId) {
+
     if (teamId <= 0) {
-        return { -1, 400, "El ID del equipo no es válido." };
+        return { {}, 400, "El ID del equipo no es válido." };
     }
-    return connection_.listPlayersByTeam(teamId, outputList);
+
+    return dbQueryResponseFactory<Player>(connection_.listPlayersByTeam(teamId));
 }
 
-DbResponse LogPlayer::getPlayerById(int playerId, Player& outputRow) {
+BackendQueryResponse<Player> LogPlayer::getPlayerById(int playerId, Player& outputRow) {
+
+    if (playerId <= 0) {
+        return { {}, 400, "El ID del jugador no es válido." };
+    }
+
+    return dbQueryResponseFactory<Player>(connection_.obtainPlayerById(playerId));
+}
+
+BackendResponse LogPlayer::updatePlayerName(int playerId, string newName) {
+
     if (playerId <= 0) {
         return { -1, 400, "El ID del jugador no es válido." };
     }
-    return connection_.obtainPlayerById(playerId, outputRow);
-}
 
-DbResponse LogPlayer::updatePlayerName(int playerId, const string& newName) {
-    Validations Validation;
-    if (playerId <= 0) {
-        return { -1, 400, "El ID del jugador no es válido." };
-    }
-    if (!Validation.isValidName(newName)) {
+    if (!isValidName(newName)) {
         return { -1, 400, "El nombre del jugador no puede estar vacío." };
     }
-    return connection_.updatePlayer(playerId, newName);
+
+    return dbResponseFactory(connection_.updatePlayer(playerId, newName));
 }
 
-DbResponse LogPlayer::removePlayer(int playerId) {
+BackendResponse LogPlayer::removePlayer(int playerId) {
+
     if (playerId <= 0) {
         return { -1, 400, "El ID del jugador no es válido." };
     }
-    return connection_.deletePlayer(playerId);
+
+    return dbResponseFactory(connection_.deletePlayer(playerId));
 }

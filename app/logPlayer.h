@@ -3,6 +3,9 @@
 #include <string>
 #include <vector>
 #include "connection.h"
+#include "backendResponse.h"
+#include "backendQueryResponse.h"
+#include "Players.h"
 
 using namespace std;
 
@@ -10,11 +13,11 @@ class LogPlayer {
 public:
     LogPlayer(Connection& dbConnection);
 
-    DbResponse registerPlayer(int teamId, const string& playerName);
-    DbResponse listPlayersByTeam(int teamId, vector<Player>& outputList);
-    DbResponse getPlayerById(int playerId, Player& outputRow);
-    DbResponse updatePlayerName(int playerId, const string& newName);
-    DbResponse removePlayer(int playerId);
+    BackendResponse registerPlayer(int teamId, string playerName);
+    BackendQueryResponse<Player> listPlayersByTeam(int teamId);
+    BackendQueryResponse<Player> getPlayerById(int playerId, Player& outputRow);
+    BackendResponse updatePlayerName(int playerId, string newName);
+    BackendResponse removePlayer(int playerId);
 
 private:
     Connection& connection_;
