@@ -5,10 +5,10 @@
 using namespace std;
 
 struct Petition {
-    int    id = 0;
+    int id = 0;
     string requesterName;
     string type;          // "Inscripcion" | "Consulta" | "Apelacion"
     string description;
     string status;        // "Pendiente" | "Atendida" | "Cancelada"
-    int    queuePosition = 0;
+    int queuePosition = 0;
 };
