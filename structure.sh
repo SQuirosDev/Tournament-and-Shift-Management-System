@@ -24,8 +24,8 @@ app/
 │   ├───logPlayer.cpp ✅
 │   ├───logMatch.h
 │   ├───logMatch.cpp
-│   ├───logPetition.h
-│   ├───logPetition.cpp
+│   ├───logPetition.h ✅
+│   ├───logPetition.cpp ✅
 │   ├───logHistory.h
 │   └───logHistory.cpp
 │
