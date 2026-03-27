@@ -146,7 +146,8 @@ DbResponse Connection::initTables() {
             "  ID INTEGER PRIMARY KEY AUTOINCREMENT,"
             "  REQUESTER_NAME TEXT NOT NULL CHECK(REQUESTER_NAME != ''),"
             "  TYPE TEXT NOT NULL CHECK(TYPE IN ('Inscripcion', 'Consulta', 'Apelacion')),"
-            "  DESCRIPTION TEXT NOT NULL DEFAULT '',"
+            "  DESCRIPTION TEXT NOT NULL,"
+            "  RESPONSE TEXT NOT NULL DEFAULT '',"
             "  STATUS TEXT NOT NULL DEFAULT 'Pendiente' CHECK(STATUS IN ('Pendiente', 'Atendida', 'Cancelada')),"
             "  QUEUE_POSITION INTEGER NOT NULL DEFAULT 0"
             ");"))
@@ -246,18 +247,19 @@ DbResponse Connection::insertTournament(string name) {
     }
 }
 
-DbResponse Connection::listTournaments(vector<Tournament>& outputList) {
+DBQueryResponse<Tournament> Connection::listTournaments() {
+    DBQueryResponse<Tournament> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        outputList.clear();
-
         // Seleccionar todos los torneos ordenados por ID
         const char* sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT ORDER BY ID;";
         sqlite3_stmt* sqlStatement = nullptr;
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listTournaments::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listTournaments::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Iterar sobre cada fila retornada
@@ -270,22 +272,34 @@ DbResponse Connection::listTournaments(vector<Tournament>& outputList) {
             tournamentRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
 
             // Agregar el registro a la lista de salida
-            outputList.push_back(tournamentRow);
+            queryResult.data.push_back(tournamentRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_TOURNAMENT_LISTED, "Torneos obtenidos: " + to_string(outputList.size()) };
+        queryResult.code = CODE_TOURNAMENT_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay torneos registrados";
+        }
+        else {
+            queryResult.message = "Torneos obtenidos: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listTournaments" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listTournaments";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listTournaments" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listTournaments";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainTournamentById(int id, Tournament& outputRow) {
+DBQueryResponse<Tournament> Connection::obtainTournamentById(int id) {
+    DBQueryResponse<Tournament> queryResult;
     try {
         // Buscar el torneo por su ID usando un placeholder ?
         const char* sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT WHERE ID = ?;";
@@ -293,7 +307,10 @@ DbResponse Connection::obtainTournamentById(int id, Tournament& outputRow) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainTournamentById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainTournamentById::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID recibido
@@ -302,23 +319,33 @@ DbResponse Connection::obtainTournamentById(int id, Tournament& outputRow) {
         // Si no retorna ninguna fila, el torneo no existe
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(id) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(id) + " no encontrado";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-        outputRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        Tournament tournamentRow;
+        tournamentRow.id = sqlite3_column_int(sqlStatement, 0);
+        tournamentRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+        tournamentRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_TOURNAMENT_LISTED, "Torneo encontrado" };
+        queryResult.data.push_back(tournamentRow);
+        queryResult.code = CODE_TOURNAMENT_LISTED;
+        queryResult.message = "Torneo encontrado";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainTournamentById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainTournamentById";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainTournamentById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainTournamentById";
+        return queryResult;
     }
 }
 
@@ -473,15 +500,15 @@ DbResponse Connection::insertTeam(string name, int tournamentId) {
     }
 }
 
-DbResponse Connection::listTeamsByTournament(int tournamentId, vector<Team>& outputList) {
+DBQueryResponse<Team> Connection::listTeamsByTournament(int tournamentId) {
+    DBQueryResponse<Team> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        outputList.clear();
-
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // Seleccionar todos los equipos del torneo con sus estadisticas
@@ -492,7 +519,10 @@ DbResponse Connection::listTeamsByTournament(int tournamentId, vector<Team>& out
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listTeamsByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listTeamsByTournament::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID del torneo
@@ -512,22 +542,34 @@ DbResponse Connection::listTeamsByTournament(int tournamentId, vector<Team>& out
             teamRow.draws = sqlite3_column_int(sqlStatement, 6);
             teamRow.losses = sqlite3_column_int(sqlStatement, 7);
 
-            outputList.push_back(teamRow);
+            queryResult.data.push_back(teamRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_TEAM_LISTED, "Equipos obtenidos: " + to_string(outputList.size()) };
+        queryResult.code = CODE_TEAM_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay equipos en este torneo";
+        }
+        else {
+            queryResult.message = "Equipos obtenidos: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listTeamsByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listTeamsByTournament";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listTeamsByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listTeamsByTournament";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainTeamById(int id, Team& outputRow) {
+DBQueryResponse<Team> Connection::obtainTeamById(int id) {
+    DBQueryResponse<Team> queryResult;
     try {
         // Seleccionar el equipo por su ID con todas sus estadisticas
         const char* sqlQuery =
@@ -537,7 +579,10 @@ DbResponse Connection::obtainTeamById(int id, Team& outputRow) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainTeamById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainTeamById::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID recibido
@@ -546,28 +591,38 @@ DbResponse Connection::obtainTeamById(int id, Team& outputRow) {
         // Si no retorna ninguna fila, el equipo no existe
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(id) + " no encontrado" };
+            queryResult.code = CODE_TEAM_NOT_FOUND;
+            queryResult.message = "Equipo con ID " + to_string(id) + " no encontrado";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        outputRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        outputRow.tournaments = sqlite3_column_int(sqlStatement, 3);
-        outputRow.points = sqlite3_column_int(sqlStatement, 4);
-        outputRow.wins = sqlite3_column_int(sqlStatement, 5);
-        outputRow.draws = sqlite3_column_int(sqlStatement, 6);
-        outputRow.losses = sqlite3_column_int(sqlStatement, 7);
+        Team teamRow;
+        teamRow.id = sqlite3_column_int(sqlStatement, 0);
+        teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+        teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
+        teamRow.points = sqlite3_column_int(sqlStatement, 4);
+        teamRow.wins = sqlite3_column_int(sqlStatement, 5);
+        teamRow.draws = sqlite3_column_int(sqlStatement, 6);
+        teamRow.losses = sqlite3_column_int(sqlStatement, 7);
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_TEAM_LISTED, "Equipo encontrado" };
+        queryResult.data.push_back(teamRow);
+        queryResult.code = CODE_TEAM_LISTED;
+        queryResult.message = "Equipo encontrado";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainTeamById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainTeamById";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainTeamById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainTeamById";
+        return queryResult;
     }
 }
 
@@ -754,15 +809,18 @@ DbResponse Connection::insertPlayer(string name, int teamId) {
     }
 }
 
-DbResponse Connection::listPlayersByTeam(int teamId, vector<Player>& outputList) {
+DBQueryResponse<Player> Connection::listPlayersByTeam(int teamId) {
+    DBQueryResponse<Player> queryResult;
     try {
         // Limpiar la lista antes de llenarla
-        outputList.clear();
+        queryResult.data.clear();
 
         // Validacion: el equipo debe existir
         string checkTeamQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamId) + ";";
         if (!rowExists(db_, checkTeamQuery)) {
-            return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(teamId) + " no encontrado" };
+            queryResult.code = CODE_TEAM_NOT_FOUND;
+            queryResult.message = "Equipo con ID " + to_string(teamId) + " no encontrado";
+            return queryResult;
         }
 
         // Seleccionar todos los jugadores del equipo ordenados por ID
@@ -771,7 +829,10 @@ DbResponse Connection::listPlayersByTeam(int teamId, vector<Player>& outputList)
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listPlayersByTeam::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listPlayersByTeam::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID del equipo
@@ -786,22 +847,34 @@ DbResponse Connection::listPlayersByTeam(int teamId, vector<Player>& outputList)
             playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
             playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
 
-            outputList.push_back(playerRow);
+            queryResult.data.push_back(playerRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_PLAYER_LISTED, "Jugadores obtenidos: " + to_string(outputList.size()) };
+        queryResult.code = CODE_PLAYER_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay jugadores en este equipo";
+        }
+        else {
+            queryResult.message = "Jugadores obtenidos: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listPlayersByTeam" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listPlayersByTeam";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listPlayersByTeam" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listPlayersByTeam";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainPlayerById(int id, Player& outputRow) {
+DBQueryResponse<Player> Connection::obtainPlayerById(int id) {
+    DBQueryResponse<Player> queryResult;
     try {
         // Buscar el jugador por su ID
         const char* sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER WHERE ID = ?;";
@@ -809,7 +882,10 @@ DbResponse Connection::obtainPlayerById(int id, Player& outputRow) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainPlayerById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainPlayerById::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID recibido
@@ -818,23 +894,33 @@ DbResponse Connection::obtainPlayerById(int id, Player& outputRow) {
         // Si no retorna ninguna fila, el jugador no existe
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_PLAYER_NOT_FOUND, "Jugador con ID " + to_string(id) + " no encontrado" };
+            queryResult.code = CODE_PLAYER_NOT_FOUND;
+            queryResult.message = "Jugador con ID " + to_string(id) + " no encontrado";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.teamId = sqlite3_column_int(sqlStatement, 1);
-        outputRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        Player playerRow;
+        playerRow.id = sqlite3_column_int(sqlStatement, 0);
+        playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
+        playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_PLAYER_LISTED, "Jugador encontrado" };
+        queryResult.data.push_back(playerRow);
+        queryResult.code = CODE_PLAYER_LISTED;
+        queryResult.message = "Jugador encontrado";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainPlayerById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainPlayerById";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainPlayerById" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainPlayerById";
+        return queryResult;
     }
 }
 
@@ -982,15 +1068,18 @@ DbResponse Connection::insertMatch(int tournamentId, int teamAId, int teamBId, s
     }
 }
 
-DbResponse Connection::listMatchesByTournament(int tournamentId, vector<Match>& outputList) {
+DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
+    DBQueryResponse<Match> queryResult;
     try {
         // Limpiar la lista antes de llenarla
-        outputList.clear();
+        queryResult.data.clear();
 
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // IFNULL maneja columnas que pueden ser NULL (WINNER_ID, RESULT, PLAYED_AT)
@@ -1003,7 +1092,10 @@ DbResponse Connection::listMatchesByTournament(int tournamentId, vector<Match>& 
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByTournament::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID del torneo
@@ -1026,35 +1118,51 @@ DbResponse Connection::listMatchesByTournament(int tournamentId, vector<Match>& 
             matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
             matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
 
-            outputList.push_back(matchRow);
+            queryResult.data.push_back(matchRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_MATCH_LISTED, "Partidos obtenidos: " + to_string(outputList.size()) };
+        queryResult.code = CODE_MATCH_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay partidos en este torneo";
+        }
+        else {
+            queryResult.message = "Partidos obtenidos: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listMatchesByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listMatchesByTournament";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listMatchesByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listMatchesByTournament";
+        return queryResult;
     }
 }
 
-DbResponse Connection::listMatchesByPhase(int tournamentId, string phase, vector<Match>& outputList) {
+DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string phase) {
+    DBQueryResponse<Match> queryResult;
     try {
         // Limpiar la lista antes de llenarla
-        outputList.clear();
+        queryResult.data.clear();
 
         // Validacion: la fase debe ser valida
         if (phase != "Grupos" && phase != "Eliminacion") {
-            return { -1, CODE_MATCH_INVALID_DATA, "Fase invalida. Use: Grupos o Eliminacion" };
+            queryResult.code = CODE_MATCH_INVALID_DATA;
+            queryResult.message = "Fase invalida. Use: Grupos o Eliminacion";
+            return queryResult;
         }
 
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // Filtrar partidos por torneo Y por fase especifica
@@ -1066,7 +1174,10 @@ DbResponse Connection::listMatchesByPhase(int tournamentId, string phase, vector
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByPhase::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByPhase::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Enlazar parametros: primer ? = tournamentId, segundo ? = phase
@@ -1087,27 +1198,41 @@ DbResponse Connection::listMatchesByPhase(int tournamentId, string phase, vector
             matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
             matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
             matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
-            outputList.push_back(matchRow);
+            queryResult.data.push_back(matchRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_MATCH_LISTED, "Partidos obtenidos: " + to_string(outputList.size()) };
+        queryResult.code = CODE_MATCH_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay partidos en la fase: " + phase;
+        }
+        else {
+            queryResult.message = "Partidos obtenidos: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listMatchesByPhase" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listMatchesByPhase";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listMatchesByPhase" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listMatchesByPhase";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainNextMatch(int tournamentId, Match& outputRow) {
+DBQueryResponse<Match> Connection::obtainNextMatch(int tournamentId) {
+    DBQueryResponse<Match> queryResult;
     try {
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // Obtener el partido pendiente con menor QUEUE_POSITION (frente de la cola)
@@ -1120,7 +1245,10 @@ DbResponse Connection::obtainNextMatch(int tournamentId, Match& outputRow) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextMatch::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextMatch::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID del torneo
@@ -1129,31 +1257,41 @@ DbResponse Connection::obtainNextMatch(int tournamentId, Match& outputRow) {
         // Si no retorna ninguna fila, no hay partidos pendientes
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_MATCH_NOT_FOUND, "No hay partidos pendientes en el torneo" };
+            queryResult.code = CODE_MATCH_NOT_FOUND;
+            queryResult.message = "No hay partidos pendientes en el torneo";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        outputRow.teamAId = sqlite3_column_int(sqlStatement, 2);
-        outputRow.teamBId = sqlite3_column_int(sqlStatement, 3);
-        outputRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        outputRow.round = sqlite3_column_int(sqlStatement, 5);
-        outputRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
-        outputRow.winnerId = sqlite3_column_int(sqlStatement, 7);
-        outputRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
-        outputRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-        outputRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
+        Match matchRow;
+        matchRow.id = sqlite3_column_int(sqlStatement, 0);
+        matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+        matchRow.teamAId = sqlite3_column_int(sqlStatement, 2);
+        matchRow.teamBId = sqlite3_column_int(sqlStatement, 3);
+        matchRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+        matchRow.round = sqlite3_column_int(sqlStatement, 5);
+        matchRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
+        matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
+        matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
+        matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
+        matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_MATCH_LISTED, "Siguiente partido obtenido" };
+        queryResult.data.push_back(matchRow);
+        queryResult.code = CODE_MATCH_LISTED;
+        queryResult.message = "Siguiente partido obtenido";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainNextMatch" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainNextMatch";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainNextMatch" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainNextMatch";
+        return queryResult;
     }
 }
 
@@ -1315,20 +1453,21 @@ DbResponse Connection::insertPetition(string requesterName, string type, string 
     }
 }
 
-DbResponse Connection::listPendingPetitions(vector<Petition>& outputList) {
+DBQueryResponse<Petition> Connection::listPendingPetitions() {
+    DBQueryResponse<Petition> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        outputList.clear();
-
         // Seleccionar solo las peticiones PENDIENTES en orden FIFO (menor QUEUE_POSITION primero)
         const char* sqlQuery =
-            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
+            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION "
             "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION;";
         sqlite3_stmt* sqlStatement = nullptr;
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listPendingPetitions::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listPendingPetitions::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Iterar sobre cada fila retornada
@@ -1343,62 +1482,92 @@ DbResponse Connection::listPendingPetitions(vector<Petition>& outputList) {
             petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
             petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
 
-            outputList.push_back(petitionRow);
+            queryResult.data.push_back(petitionRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_PETITION_LISTED, "Peticiones pendientes: " + to_string(outputList.size()) };
+        queryResult.code = CODE_PETITION_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay peticiones pendientes";
+        }
+        else {
+            queryResult.message = "Peticiones pendientes: " + to_string(queryResult.data.size());
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listPendingPetitions" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listPendingPetitions";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listPendingPetitions" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listPendingPetitions";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainNextPetition(Petition& outputRow) {
+DBQueryResponse<Petition> Connection::obtainNextPetition() {
+    DBQueryResponse<Petition> queryResult;
     try {
         // Obtener la peticion pendiente con menor QUEUE_POSITION (frente de la cola FIFO)
         const char* sqlQuery =
-            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
+            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION "
             "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION LIMIT 1;";
         sqlite3_stmt* sqlStatement = nullptr;
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextPetition::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextPetition::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Si no retorna ninguna fila, no hay peticiones pendientes
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_PETITION_NOT_FOUND, "No hay peticiones pendientes" };
+            queryResult.code = CODE_PETITION_NOT_FOUND;
+            queryResult.message = "No hay peticiones pendientes";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-        outputRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        outputRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-        outputRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        outputRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
+        Petition petitionRow;
+        petitionRow.id = sqlite3_column_int(sqlStatement, 0);
+        petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+        petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
+        petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+        petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_PETITION_LISTED, "Siguiente peticion obtenida" };
+        queryResult.data.push_back(petitionRow);
+        queryResult.code = CODE_PETITION_LISTED;
+        queryResult.message = "Siguiente peticion obtenida";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainNextPetition" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainNextPetition";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainNextPetition" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainNextPetition";
+        return queryResult;
     }
 }
 
-DbResponse Connection::updatePetitionStatus(int id, string status) {
+DbResponse Connection::updatePetitionStatus(int id, string response, string status) {
     try {
+        // Validacion: el nombre del solicitante no puede estar vacio
+        if (response.empty()) {
+            return { -1, CODE_PETITION_INVALID_DATA, "La respuesta no puede estar vacio" };
+        }
+
         // Validacion: el nuevo estado debe ser Atendida o Cancelada
         if (status != "Atendida" && status != "Cancelada") {
             return { -1, CODE_PETITION_INVALID_DATA, "Estado invalido. Use: Atendida o Cancelada" };
@@ -1413,7 +1582,7 @@ DbResponse Connection::updatePetitionStatus(int id, string status) {
         }
 
         // Actualizar el estado de la peticion
-        const char* sqlQuery = "UPDATE TB_PETITION SET STATUS = ? WHERE ID = ?;";
+        const char* sqlQuery = "UPDATE TB_PETITION SET RESPONSE = ?, STATUS = ? WHERE ID = ?;";
         sqlite3_stmt* sqlStatement = nullptr;
 
         // Compilar la query
@@ -1422,8 +1591,9 @@ DbResponse Connection::updatePetitionStatus(int id, string status) {
         }
 
         // Enlazar parametros: primer ? = status, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, status.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, id);
+        sqlite3_bind_text(sqlStatement, 1, response.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(sqlStatement, 2, status.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(sqlStatement, 3, id);
 
         int resultCode = sqlite3_step(sqlStatement);
         sqlite3_finalize(sqlStatement);
@@ -1504,15 +1674,18 @@ DbResponse Connection::insertHistoric(int tournamentId, string actionType, strin
     }
 }
 
-DbResponse Connection::listHistoricByTournament(int tournamentId, vector<Historic>& outputList) {
+DBQueryResponse<Historic> Connection::listHistoricByTournament(int tournamentId) {
+    DBQueryResponse<Historic> queryResult;
     try {
         // Limpiar la lista antes de llenarla
-        outputList.clear();
+        queryResult.data.clear();
 
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // Orden LIFO: mayor STACK_POSITION primero (tope de la pila = accion mas reciente)
@@ -1523,7 +1696,10 @@ DbResponse Connection::listHistoricByTournament(int tournamentId, vector<Histori
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "listHistoricByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listHistoricByTournament::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
         }
 
         // Reemplazar el ? con el ID del torneo
@@ -1541,27 +1717,41 @@ DbResponse Connection::listHistoricByTournament(int tournamentId, vector<Histori
             historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
             historicRow.stackPosition = sqlite3_column_int(sqlStatement, 5);
 
-            outputList.push_back(historicRow);
+            queryResult.data.push_back(historicRow);
         }
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_HISTORIC_LISTED, "Historial obtenido: " + to_string(outputList.size()) + " entradas" };
+        queryResult.code = CODE_HISTORIC_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay acciones en el historial";
+        }
+        else {
+            queryResult.message = "Historial obtenido: " + to_string(queryResult.data.size()) + " entradas";
+        }
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en listHistoricByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listHistoricByTournament";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en listHistoricByTournament" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listHistoricByTournament";
+        return queryResult;
     }
 }
 
-DbResponse Connection::obtainLastHistoric(int tournamentId, Historic& outputRow) {
+DBQueryResponse<Historic> Connection::obtainLastHistoric(int tournamentId) {
+    DBQueryResponse<Historic> queryResult;
     try {
         // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
+            return queryResult;
         }
 
         // Obtener solo el tope de la pila (mayor STACK_POSITION) con LIMIT 1
@@ -1571,8 +1761,12 @@ DbResponse Connection::obtainLastHistoric(int tournamentId, Historic& outputRow)
         sqlite3_stmt* sqlStatement = nullptr;
 
         // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK)
-            return sqliteError(CODE_DB_PREPARE_ERROR, "obtainLastHistoric::prepare");
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainLastHistoric::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
+        }
 
         // Reemplazar el ? con el ID del torneo
         sqlite3_bind_int(sqlStatement, 1, tournamentId);
@@ -1580,26 +1774,36 @@ DbResponse Connection::obtainLastHistoric(int tournamentId, Historic& outputRow)
         // Si no retorna ninguna fila, el historial esta vacio para este torneo
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
-            return { -1, CODE_HISTORIC_NOT_FOUND, "No hay acciones en el historial para este torneo" };
+            queryResult.code = CODE_HISTORIC_NOT_FOUND;
+            queryResult.message = "No hay acciones en el historial para este torneo";
+            return queryResult;
         }
 
         // Mapear las columnas al struct de salida
-        outputRow.id = sqlite3_column_int(sqlStatement, 0);
-        outputRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        outputRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        outputRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-        outputRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        outputRow.stackPosition = sqlite3_column_int(sqlStatement, 5);
+        Historic historicRow;
+        historicRow.id = sqlite3_column_int(sqlStatement, 0);
+        historicRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+        historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
+        historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+        historicRow.stackPosition = sqlite3_column_int(sqlStatement, 5);
 
         sqlite3_finalize(sqlStatement);
-        return { 1, CODE_HISTORIC_LISTED, "Ultima accion obtenida" };
+        queryResult.data.push_back(historicRow);
+        queryResult.code = CODE_HISTORIC_LISTED;
+        queryResult.message = "Ultima accion obtenida";
+        return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en obtainLastHistoric" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainLastHistoric";
+        return queryResult;
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en obtainLastHistoric" };
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainLastHistoric";
+        return queryResult;
     }
 }
 

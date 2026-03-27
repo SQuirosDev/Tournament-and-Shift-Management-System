@@ -4,6 +4,8 @@
 #include <vector>
 #include "sqlite3.h"
 #include "codes.h"
+#include "dbResponse.h"
+#include "dbQueryResponse.h"
 #include "tournaments.h"
 #include "teams.h"
 #include "players.h"
@@ -12,12 +14,6 @@
 #include "historics.h"
 
 using namespace std;
-
-struct DbResponse {
-    int    id = -1;
-    int    code = 0;
-    string message;
-};
 
 class Connection {
 public:
@@ -33,8 +29,8 @@ public:
     //  TB_TOURNAMENT
     // ============================================================
     DbResponse insertTournament(string name);
-    DbResponse listTournaments(vector<Tournament>& outputList);
-    DbResponse obtainTournamentById(int id, Tournament& outputRow);
+    DBQueryResponse<Tournament> listTournaments();
+    DBQueryResponse<Tournament> obtainTournamentById(int id);
     DbResponse updateTournamentPhase(int id, string phase);
     DbResponse updateTournamentName(int id, string newName);
 
@@ -42,8 +38,8 @@ public:
     //  TB_TEAM
     // ============================================================
     DbResponse insertTeam(string name, int tournamentId);
-    DbResponse listTeamsByTournament(int tournamentId, vector<Team>& outputList);
-    DbResponse obtainTeamById(int id, Team& outputRow);
+    DBQueryResponse<Team> listTeamsByTournament(int tournamentId);
+    DBQueryResponse<Team> obtainTeamById(int id);
     DbResponse updateTeam(int id, string newName);
     DbResponse updateTeamStats(int id, int points, int wins, int draws, int losses);
     DbResponse deleteTeam(int id);
@@ -52,8 +48,8 @@ public:
     //  TB_PLAYER
     // ============================================================
     DbResponse insertPlayer(string name, int teamId);
-    DbResponse listPlayersByTeam(int teamId, vector<Player>& outputList);
-    DbResponse obtainPlayerById(int id, Player& outputRow);
+    DBQueryResponse<Player> listPlayersByTeam(int teamId);
+    DBQueryResponse<Player> obtainPlayerById(int id);
     DbResponse updatePlayer(int id, string name);
     DbResponse deletePlayer(int id);
 
@@ -61,9 +57,9 @@ public:
     //  TB_MATCH
     // ============================================================
     DbResponse insertMatch(int tournamentId, int teamAId, int teamBId, string phase, int round, int queuePosition);
-    DbResponse listMatchesByTournament(int tournamentId, vector<Match>& outputList);
-    DbResponse listMatchesByPhase(int tournamentId, string phase, vector<Match>& outputList);
-    DbResponse obtainNextMatch(int tournamentId, Match& outputRow);
+    DBQueryResponse<Match> listMatchesByTournament(int tournamentId);
+    DBQueryResponse<Match> listMatchesByPhase(int tournamentId, string phase);
+    DBQueryResponse<Match> obtainNextMatch(int tournamentId);
     DbResponse updateMatchResult(int id, string result, int winnerId, int round);
     DbResponse deleteMatch(int id);
 
@@ -71,16 +67,16 @@ public:
     //  TB_PETITION
     // ============================================================
     DbResponse insertPetition(string requesterName, string type, string description);
-    DbResponse listPendingPetitions(vector<Petition>& outputList);
-    DbResponse obtainNextPetition(Petition& outputRow);
-    DbResponse updatePetitionStatus(int id, string status);
+    DBQueryResponse<Petition> listPendingPetitions();
+    DBQueryResponse<Petition> obtainNextPetition();
+    DbResponse updatePetitionStatus(int id, string response, string status);
 
     // ============================================================
     //  TB_HISTORIC (Pila / Deshacer)
     // ============================================================
     DbResponse insertHistoric(int tournamentId, string actionType, string previousData, string newData, int stackPosition);
-    DbResponse listHistoricByTournament(int tournamentId, vector<Historic>& outputList);
-    DbResponse obtainLastHistoric(int tournamentId, Historic& outputRow);
+    DBQueryResponse<Historic> listHistoricByTournament(int tournamentId);
+    DBQueryResponse<Historic> obtainLastHistoric(int tournamentId);
     DbResponse deleteLastHistoric(int tournamentId);
     DbResponse deleteHistoricById(int id);
 
