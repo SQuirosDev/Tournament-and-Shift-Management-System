@@ -156,12 +156,14 @@ DbResponse Connection::initTables() {
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_HISTORIC ("
             "  ID INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  TOURNAMENT_ID INTEGER REFERENCES TB_TOURNAMENT(ID) ON DELETE CASCADE,"
             "  ACTION_TYPE TEXT NOT NULL,"
+            "  ENTITY_TYPE TEXT NOT NULL,"
+            "  RECORD_ID INTEGER,"
             "  PREVIOUS_DATA TEXT NOT NULL DEFAULT '{}',"
             "  NEW_DATA TEXT NOT NULL DEFAULT '{}',"
             "  STACK_POSITION INTEGER NOT NULL DEFAULT 0"
             ");"))
+
             return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_HISTORIC");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_TEAM_TOURNAMENT ON TB_TEAM(TOURNAMENT_ID);"))
@@ -1618,41 +1620,39 @@ DbResponse Connection::updatePetitionStatus(int id, string response, string stat
 //  TB_HISTORIC
 // ============================================================
 
-DbResponse Connection::insertHistoric(int tournamentId, string actionType, string previousData, string newData, int stackPosition) {
+DbResponse Connection::insertHistoric(string actionType, string entityType, int recordId, string previousData, string newData, int stackPosition)
+{
     try {
-        // Validacion: el tipo de accion no puede estar vacio
+        // Validaciones básicas
         if (actionType.empty()) {
             return { -1, CODE_HISTORIC_INVALID, "El tipo de accion no puede estar vacio" };
         }
 
-        // Validacion: los datos previos son necesarios para poder revertir la accion
+        if (entityType.empty()) {
+            return { -1, CODE_HISTORIC_INVALID, "El tipo de entidad no puede estar vacio" };
+        }
+
         if (previousData.empty()) {
             return { -1, CODE_HISTORIC_INVALID, "Los datos previos son necesarios para permitir deshacer" };
         }
 
-        // Validacion: el torneo debe existir
-        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
-        if (!rowExists(db_, checkTournamentQuery)) {
-            return { -1, CODE_TOURNAMENT_NOT_FOUND, "El torneo con ID " + to_string(tournamentId) + " no existe" };
-        }
-
-        // Insertar la accion en el historial con su posicion en la pila
         const char* sqlQuery =
-            "INSERT INTO TB_HISTORIC (TOURNAMENT_ID, ACTION_TYPE, PREVIOUS_DATA, NEW_DATA, STACK_POSITION) "
-            "VALUES (?, ?, ?, ?, ?);";
+            "INSERT INTO TB_HISTORIC "
+            "(ACTION_TYPE, ENTITY_TYPE, RECORD_ID, PREVIOUS_DATA, NEW_DATA, STACK_POSITION) "
+            "VALUES (?, ?, ?, ?, ?, ?);";
+
         sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
             return sqliteError(CODE_DB_PREPARE_ERROR, "insertHistoric::prepare");
         }
 
-        // Enlazar cada parametro en el orden de los ? en la query
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-        sqlite3_bind_text(sqlStatement, 2, actionType.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 3, previousData.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 4, newData.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 5, stackPosition);
+        sqlite3_bind_text(sqlStatement, 1, actionType.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sqlStatement, 2, entityType.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int(sqlStatement, 3, recordId);
+        sqlite3_bind_text(sqlStatement, 4, previousData.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(sqlStatement, 5, newData.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int(sqlStatement, 6, stackPosition);
 
         int resultCode = sqlite3_step(sqlStatement);
         sqlite3_finalize(sqlStatement);
@@ -1661,7 +1661,6 @@ DbResponse Connection::insertHistoric(int tournamentId, string actionType, strin
             return sqliteError(CODE_DB_STEP_ERROR, "insertHistoric::step");
         }
 
-        // Obtener el ID asignado automaticamente por SQLite
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
         return { insertedId, CODE_OK, "Accion registrada en el historial" };
     }
@@ -1674,168 +1673,89 @@ DbResponse Connection::insertHistoric(int tournamentId, string actionType, strin
     }
 }
 
-DBQueryResponse<Historic> Connection::listHistoricByTournament(int tournamentId) {
+DBQueryResponse<Historic> Connection::listHistoric() {
     DBQueryResponse<Historic> queryResult;
+
     try {
-        // Limpiar la lista antes de llenarla
         queryResult.data.clear();
 
-        // Validacion: el torneo debe existir
-        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
-        if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
-        }
-
-        // Orden LIFO: mayor STACK_POSITION primero (tope de la pila = accion mas reciente)
         const char* sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, ACTION_TYPE, PREVIOUS_DATA, NEW_DATA, STACK_POSITION "
-            "FROM TB_HISTORIC WHERE TOURNAMENT_ID = ? ORDER BY STACK_POSITION DESC;";
+            "SELECT ID, ACTION_TYPE, ENTITY_TYPE, RECORD_ID, PREVIOUS_DATA, NEW_DATA, STACK_POSITION "
+            "FROM TB_HISTORIC "
+            "ORDER BY STACK_POSITION ASC;";
+
         sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listHistoricByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listHistoric::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
         }
 
-        // Reemplazar el ? con el ID del torneo
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-
-        // Iterar sobre cada fila retornada
         while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
             Historic historicRow;
 
-            // Mapear cada columna al campo correspondiente del struct
             historicRow.id = sqlite3_column_int(sqlStatement, 0);
-            historicRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-            historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-            historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-            historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-            historicRow.stackPosition = sqlite3_column_int(sqlStatement, 5);
+            historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+            historicRow.entityType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+            historicRow.recordId = sqlite3_column_int(sqlStatement, 3);
+            historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+            historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 5));
+            historicRow.stackPosition = sqlite3_column_int(sqlStatement, 6);
 
             queryResult.data.push_back(historicRow);
         }
 
         sqlite3_finalize(sqlStatement);
+
         queryResult.code = CODE_HISTORIC_LISTED;
+
         if (queryResult.data.empty()) {
             queryResult.message = "No hay acciones en el historial";
         }
         else {
             queryResult.message = "Historial obtenido: " + to_string(queryResult.data.size()) + " entradas";
         }
+
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
         queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listHistoricByTournament";
+        queryResult.message = "Excepcion no esperada en listHistoric";
         return queryResult;
     }
     catch (...) {
         queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listHistoricByTournament";
+        queryResult.message = "Excepcion desconocida en listHistoric";
         return queryResult;
     }
 }
 
-DBQueryResponse<Historic> Connection::obtainLastHistoric(int tournamentId) {
-    DBQueryResponse<Historic> queryResult;
+DbResponse Connection::deleteLastHistoric() {
     try {
-        // Validacion: el torneo debe existir
-        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
-        if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
-        }
-
-        // Obtener solo el tope de la pila (mayor STACK_POSITION) con LIMIT 1
-        const char* sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, ACTION_TYPE, PREVIOUS_DATA, NEW_DATA, STACK_POSITION "
-            "FROM TB_HISTORIC WHERE TOURNAMENT_ID = ? ORDER BY STACK_POSITION DESC LIMIT 1;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainLastHistoric::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        // Reemplazar el ? con el ID del torneo
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-
-        // Si no retorna ninguna fila, el historial esta vacio para este torneo
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_HISTORIC_NOT_FOUND;
-            queryResult.message = "No hay acciones en el historial para este torneo";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Historic historicRow;
-        historicRow.id = sqlite3_column_int(sqlStatement, 0);
-        historicRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-        historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        historicRow.stackPosition = sqlite3_column_int(sqlStatement, 5);
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.data.push_back(historicRow);
-        queryResult.code = CODE_HISTORIC_LISTED;
-        queryResult.message = "Ultima accion obtenida";
-        return queryResult;
-    }
-    catch (exception& e) {
-        cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainLastHistoric";
-        return queryResult;
-    }
-    catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainLastHistoric";
-        return queryResult;
-    }
-}
-
-DbResponse Connection::deleteLastHistoric(int tournamentId) {
-    try {
-        // Primer paso: obtener el ID del tope de la pila (mayor STACK_POSITION)
         const char* sqlQuerySelect =
-            "SELECT ID FROM TB_HISTORIC WHERE TOURNAMENT_ID = ? ORDER BY STACK_POSITION DESC LIMIT 1;";
+            "SELECT ID FROM TB_HISTORIC "
+            "ORDER BY STACK_POSITION DESC LIMIT 1;";
+
         sqlite3_stmt* sqlStatementSelect = nullptr;
 
-        // Compilar la query de seleccion
         if (sqlite3_prepare_v2(db_, sqlQuerySelect, -1, &sqlStatementSelect, nullptr) != SQLITE_OK) {
             return sqliteError(CODE_DB_PREPARE_ERROR, "deleteLastHistoric::select::prepare");
         }
 
-        sqlite3_bind_int(sqlStatementSelect, 1, tournamentId);
-
-        // Si no retorna ninguna fila, no hay acciones para deshacer
         if (sqlite3_step(sqlStatementSelect) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatementSelect);
-            return { -1, CODE_HISTORIC_NOT_FOUND, "No hay acciones para deshacer en el torneo ID " + to_string(tournamentId) };
+            return { -1, CODE_HISTORIC_NOT_FOUND, "No hay acciones para deshacer" };
         }
 
-        // Guardar el ID de la ultima accion para retornarlo en la respuesta
         int lastHistoricId = sqlite3_column_int(sqlStatementSelect, 0);
         sqlite3_finalize(sqlStatementSelect);
 
-        // Segundo paso: eliminar esa entrada por su ID
         const char* sqlQueryDelete = "DELETE FROM TB_HISTORIC WHERE ID = ?;";
         sqlite3_stmt* sqlStatementDelete = nullptr;
 
-        // Compilar la query de eliminacion
         if (sqlite3_prepare_v2(db_, sqlQueryDelete, -1, &sqlStatementDelete, nullptr) != SQLITE_OK) {
             return sqliteError(CODE_DB_PREPARE_ERROR, "deleteLastHistoric::delete::prepare");
         }
@@ -1849,7 +1769,7 @@ DbResponse Connection::deleteLastHistoric(int tournamentId) {
             return sqliteError(CODE_DB_STEP_ERROR, "deleteLastHistoric::delete::step");
         }
 
-        return { lastHistoricId, CODE_HISTORIC_DELETED, "Ultima accion eliminada del historial (ID: " + to_string(lastHistoricId) + ")" };
+        return { lastHistoricId, CODE_HISTORIC_DELETED, "Ultima accion eliminada del historial" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -1857,43 +1777,5 @@ DbResponse Connection::deleteLastHistoric(int tournamentId) {
     }
     catch (...) {
         return { -1, CODE_EXCEPTION, "Excepcion desconocida en deleteLastHistoric" };
-    }
-}
-
-DbResponse Connection::deleteHistoricById(int id) {
-    try {
-        // Validacion: verificar que la entrada del historial exista antes de eliminarla
-        string checkExistQuery = "SELECT COUNT(*) FROM TB_HISTORIC WHERE ID = " + to_string(id) + ";";
-        if (!rowExists(db_, checkExistQuery)) {
-            return { -1, CODE_HISTORIC_NOT_FOUND, "Entrada de historial con ID " + to_string(id) + " no encontrada" };
-        }
-
-        // Eliminar la entrada del historial por su ID
-        const char* sqlQuery = "DELETE FROM TB_HISTORIC WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deleteHistoricById::prepare");
-        }
-
-        // Reemplazar el ? con el ID de la entrada a eliminar
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
-
-        if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deleteHistoricById::step");
-        }
-
-        return { id, CODE_HISTORIC_DELETED, "Entrada de historial eliminada (ID: " + to_string(id) + ")" };
-    }
-    catch (exception& e) {
-        cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en deleteHistoricById" };
-    }
-    catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en deleteHistoricById" };
     }
 }

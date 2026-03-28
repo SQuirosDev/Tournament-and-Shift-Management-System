@@ -74,11 +74,9 @@ public:
     // ============================================================
     //  TB_HISTORIC (Pila / Deshacer)
     // ============================================================
-    DbResponse insertHistoric(int tournamentId, string actionType, string previousData, string newData, int stackPosition);
-    DBQueryResponse<Historic> listHistoricByTournament(int tournamentId);
-    DBQueryResponse<Historic> obtainLastHistoric(int tournamentId);
-    DbResponse deleteLastHistoric(int tournamentId);
-    DbResponse deleteHistoricById(int id);
+    DbResponse insertHistoric(string actionType, string entityType, int recordId, string previousData, string newData, int stackPosition);
+    DBQueryResponse<Historic> listHistoric();
+    DbResponse deleteLastHistoric();
 
 private:
 
