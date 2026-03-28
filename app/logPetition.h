@@ -6,14 +6,16 @@
 #include "backendQueryResponse.h"
 #include "Petitions.h"
 
-class LogPetitions {
+class LogPetition {
 public:
-    LogPetitions(Connection& dbConnection);
+    LogPetition(Connection& dbConnection);
 
-    BackendResponse registerPetition(string requesterName, string type, string description);
-    BackendResponse updatePetition(int id, string responseText);
+    BackendResponse insert(string requesterName, string type, string description);
+    BackendResponse update(int id, string responseText);
     BackendQueryResponse<Petition> peekNextPetition();
     BackendQueryResponse<Petition> listPendingPetitions();
+    // hacer funcion
+    BackendResponse eliminar(int id);
     int pendingCount();
 
 private:

@@ -79,6 +79,12 @@
     <ClCompile Include="helpers.cpp">
       <Filter>Source Files\utils</Filter>
     </ClCompile>
+    <ClCompile Include="logHistoric.cpp">
+      <Filter>Source Files\logics</Filter>
+    </ClCompile>
+    <ClCompile Include="stackHistoric.cpp">
+      <Filter>Source Files\data</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -117,7 +123,7 @@
     <ClInclude Include="logPetition.h">
       <Filter>Source Files\logics</Filter>
     </ClInclude>
-    <ClInclude Include="logHistory.h">
+    <ClInclude Include="logHistoric.h">
       <Filter>Source Files\logics</Filter>
     </ClInclude>
     <ClInclude Include="connection.h">
@@ -132,7 +138,7 @@
     <ClInclude Include="queue.h">
       <Filter>Source Files\data</Filter>
     </ClInclude>
-    <ClInclude Include="stack.h">
+    <ClInclude Include="stackHistoric.h">
       <Filter>Source Files\data</Filter>
     </ClInclude>
     <ClInclude Include="dbResponse.h">
@@ -151,6 +157,12 @@
       <Filter>Source Files\models</Filter>
     </ClInclude>
     <ClInclude Include="backendQueryResponse.h">
+      <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="json.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nodeHistoric.h">
       <Filter>Source Files\models</Filter>
     </ClInclude>
   </ItemGroup>

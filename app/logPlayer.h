@@ -13,11 +13,11 @@ class LogPlayer {
 public:
     LogPlayer(Connection& dbConnection);
 
-    BackendResponse registerPlayer(int teamId, string playerName);
-    BackendQueryResponse<Player> listPlayersByTeam(int teamId);
-    BackendQueryResponse<Player> getPlayerById(int playerId, Player& outputRow);
-    BackendResponse updatePlayerName(int playerId, string newName);
-    BackendResponse removePlayer(int playerId);
+    BackendResponse insert(int teamId, string playerName);
+    BackendQueryResponse<Player> listByTeam(int teamId);
+    BackendQueryResponse<Player> getById(int playerId, Player& outputRow);
+    BackendResponse update(int playerId, string newName);
+    BackendResponse eliminar(int playerId);
 
 private:
     Connection& connection_;

@@ -4,7 +4,7 @@
 
 LogPlayer::LogPlayer(Connection& dbConnection) : connection_(dbConnection) {}
 
-BackendResponse LogPlayer::registerPlayer(int teamId, string playerName) {
+BackendResponse LogPlayer::insert(int teamId, string playerName) {
 
     if (teamId <= 0) {
         return { -1, 400, "El ID del equipo no es válido." };
@@ -17,7 +17,7 @@ BackendResponse LogPlayer::registerPlayer(int teamId, string playerName) {
     return dbResponseFactory(connection_.insertPlayer(playerName, teamId));
 }
 
-BackendQueryResponse<Player> LogPlayer::listPlayersByTeam(int teamId) {
+BackendQueryResponse<Player> LogPlayer::listByTeam(int teamId) {
 
     if (teamId <= 0) {
         return { {}, 400, "El ID del equipo no es válido." };
@@ -26,7 +26,7 @@ BackendQueryResponse<Player> LogPlayer::listPlayersByTeam(int teamId) {
     return dbQueryResponseFactory<Player>(connection_.listPlayersByTeam(teamId));
 }
 
-BackendQueryResponse<Player> LogPlayer::getPlayerById(int playerId, Player& outputRow) {
+BackendQueryResponse<Player> LogPlayer::getById(int playerId, Player& outputRow) {
 
     if (playerId <= 0) {
         return { {}, 400, "El ID del jugador no es válido." };
@@ -35,7 +35,7 @@ BackendQueryResponse<Player> LogPlayer::getPlayerById(int playerId, Player& outp
     return dbQueryResponseFactory<Player>(connection_.obtainPlayerById(playerId));
 }
 
-BackendResponse LogPlayer::updatePlayerName(int playerId, string newName) {
+BackendResponse LogPlayer::update(int playerId, string newName) {
 
     if (playerId <= 0) {
         return { -1, 400, "El ID del jugador no es válido." };
@@ -48,7 +48,7 @@ BackendResponse LogPlayer::updatePlayerName(int playerId, string newName) {
     return dbResponseFactory(connection_.updatePlayer(playerId, newName));
 }
 
-BackendResponse LogPlayer::removePlayer(int playerId) {
+BackendResponse LogPlayer::eliminar(int playerId) {
 
     if (playerId <= 0) {
         return { -1, 400, "El ID del jugador no es válido." };

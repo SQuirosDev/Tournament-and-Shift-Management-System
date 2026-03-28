@@ -2,9 +2,9 @@
 #include "logPetition.h"
 #include "factories.h"
 
-LogPetitions::LogPetitions(Connection& dbConnection) : connection_(dbConnection) {}
+LogPetition::LogPetition(Connection& dbConnection) : connection_(dbConnection) {}
 
-BackendResponse LogPetitions::registerPetition(string requesterName, string type, string description) {
+BackendResponse LogPetition::insert(string requesterName, string type, string description) {
 
     if (requesterName.empty()) {
         return { -1, CODE_PETITION_INVALID_DATA, "El nombre del solicitante no puede estar vacío." };
@@ -17,7 +17,7 @@ BackendResponse LogPetitions::registerPetition(string requesterName, string type
     return dbResponseFactory(connection_.insertPetition(requesterName, type, description));
 }
 
-BackendResponse LogPetitions::updatePetition(int id, string responseText) {
+BackendResponse LogPetition::update(int id, string responseText) {
 
     if (responseText.empty()) {
         return { -1, CODE_PETITION_INVALID_DATA, "La respuesta no puede estar vacía." };
@@ -32,7 +32,7 @@ BackendResponse LogPetitions::updatePetition(int id, string responseText) {
     return { updateResponse.id, CODE_PETITION_ATTENDED, "Petición atendida correctamente." };
 }
 
-BackendQueryResponse<Petition> LogPetitions::peekNextPetition() {
+BackendQueryResponse<Petition> LogPetition::peekNextPetition() {
 
     DBQueryResponse obtainResponse = connection_.obtainNextPetition();
 
@@ -43,12 +43,17 @@ BackendQueryResponse<Petition> LogPetitions::peekNextPetition() {
     return dbQueryResponseFactory(obtainResponse);
 }
 
-BackendQueryResponse<Petition> LogPetitions::listPendingPetitions() {
+BackendQueryResponse<Petition> LogPetition::listPendingPetitions() {
 
     return dbQueryResponseFactory(connection_.listPendingPetitions());
 }
 
-int LogPetitions::pendingCount() {
+BackendResponse LogPetition::eliminar(int id)
+{
+    return BackendResponse();
+}
+
+int LogPetition::pendingCount() {
 
     BackendQueryResponse listResponse = dbQueryResponseFactory(connection_.listPendingPetitions());
 

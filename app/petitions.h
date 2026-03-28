@@ -9,6 +9,7 @@ struct Petition {
     string requesterName;
     string type;          // "Inscripcion" | "Consulta" | "Apelacion"
     string description;
+    string response;
     string status;        // "Pendiente" | "Atendida" | "Cancelada"
     int queuePosition = 0;
 };
