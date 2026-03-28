@@ -13,5 +13,10 @@ public:
 
 private:
     Ui::appClass ui;
+private slots:
+    void onPlayersClicked();
+    void onTeamsClicked();
+    void onTournamentsClicked();
+    void onMatchesClicked();
 };
 
