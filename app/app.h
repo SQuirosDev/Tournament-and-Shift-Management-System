@@ -2,6 +2,8 @@
 
 #include <QtWidgets/QMainWindow>
 #include "ui_app.h"
+#include "connection.h"
+#include <QtWidgets/QLabel>
 
 class app : public QMainWindow
 {
@@ -13,6 +15,9 @@ public:
 
 private:
     Ui::appClass ui;
+    Connection* conn_;
+    QLabel* lblWelcome;
+    void updateUiState();
 private slots:
     void onPlayersClicked();
     void onTeamsClicked();

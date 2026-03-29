@@ -85,6 +85,21 @@
     <ClCompile Include="stackHistoric.cpp">
       <Filter>Source Files\data</Filter>
     </ClCompile>
+    <ClCompile Include="dialogs\tournamentsdialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dialogs\playersdialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dialogs\teamsdialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dialogs\matchesdialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dialogs\dialog_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -165,5 +180,41 @@
     <ClInclude Include="nodeHistoric.h">
       <Filter>Source Files\models</Filter>
     </ClInclude>
+    <ClInclude Include="dialogs\ui_tournamentsdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\tournamentsdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\ui_playersdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\playersdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\ui_teamsdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\teamsdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\ui_matchesdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\matchesdialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dialogs\dialog_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\icons\trophy.svg" />
+    <None Include="app\resources\icons\player.svg" />
+    <None Include="app\resources\icons\teams.svg" />
+    <None Include="app\resources\icons\matches.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="app\resources\icons\placeholder.txt" />
   </ItemGroup>
 </Project>

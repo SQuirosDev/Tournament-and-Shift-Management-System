@@ -98,6 +98,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="connection.cpp" />
+    <ClCompile Include="dialogs\dialog_manager.cpp" />
+    <ClCompile Include="dialogs\matchesdialog.cpp" />
+    <ClCompile Include="dialogs\playersdialog.cpp" />
+    <ClCompile Include="dialogs\teamsdialog.cpp" />
+    <ClCompile Include="dialogs\tournamentsdialog.cpp" />
     <ClCompile Include="factories.cpp" />
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="logHistoric.cpp" />
@@ -116,6 +121,15 @@
     <ClInclude Include="backendQueryResponse.h" />
     <ClInclude Include="backendResponse.h" />
     <ClInclude Include="dbResponse.h" />
+    <ClInclude Include="dialogs\dialog_manager.h" />
+    <ClInclude Include="dialogs\matchesdialog.h" />
+    <ClInclude Include="dialogs\playersdialog.h" />
+    <ClInclude Include="dialogs\teamsdialog.h" />
+    <ClInclude Include="dialogs\tournamentsdialog.h" />
+    <ClInclude Include="dialogs\ui_matchesdialog.h" />
+    <ClInclude Include="dialogs\ui_playersdialog.h" />
+    <ClInclude Include="dialogs\ui_teamsdialog.h" />
+    <ClInclude Include="dialogs\ui_tournamentsdialog.h" />
     <ClInclude Include="factories.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="historics.h" />
@@ -139,6 +153,15 @@
     <ClInclude Include="teams.h" />
     <ClInclude Include="tournaments.h" />
     <ClInclude Include="validations.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\icons\matches.svg" />
+    <None Include="app\resources\icons\player.svg" />
+    <None Include="app\resources\icons\teams.svg" />
+    <None Include="resources\icons\trophy.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="app\resources\icons\placeholder.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
