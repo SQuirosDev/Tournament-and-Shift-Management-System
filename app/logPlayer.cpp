@@ -27,7 +27,9 @@ BackendResponse LogPlayer::insert(int teamId, string playerName) {
         return response;
     }
 
-    logHistoric->insert(historicFactory("Insert", "Player", response.id, "{}", playerName));
+    string newData = "{ \"id\": " + to_string(response.id) + ", \"teamId\": " + to_string(teamId) + ", \"name\": \"" + playerName + "\" }";
+
+    logHistoric->insert(historicFactory("Insert", "Player", response.id, "{}", newData));
 
     return response;
 }
