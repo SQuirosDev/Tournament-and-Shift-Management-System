@@ -1,9 +1,21 @@
 #include "logHistoric.h"
+#include "logPlayer.h"
+#include "logPetition.h"
 
-LogHistoric::LogHistoric(Connection& dbConnection, LogPlayer& player, LogPetition& petition) : connection(dbConnection), logPlayer(player), logPetition(petition) {}
+LogHistoric::LogHistoric(Connection& dbConnection) : connection(dbConnection) {
+    logPlayer = nullptr;
+    logPetition = nullptr;
+}
 
+void LogHistoric::setLogPlayer(LogPlayer* player) {
+    logPlayer = player;
+}
 
-BackendResponse LogHistoric::insert(Historic& h) {
+void LogHistoric::setLogPetition(LogPetition* petition) {
+    logPetition = petition;
+}
+
+BackendResponse LogHistoric::insert(Historic h) {
     return dbResponseFactory(connection.insertHistoric(h.actionType, h.entityType, h.recordId, h.previousData, h.newData, h.stackPosition));
 }
 
@@ -58,16 +70,16 @@ BackendResponse LogHistoric::undoPlayer(Historic& h) {
     }
 
     if (h.actionType == "INSERT") {
-        return logPlayer.eliminar(h.recordId);
+        return logPlayer->eliminar(h.recordId);
     }
     else if (h.actionType == "UPDATE") {
         string name = prev.value("name", "");
-        return logPlayer.update(h.recordId, name);
+        return logPlayer->update(h.recordId, name);
     }
     else if (h.actionType == "DELETE") 
     {
         string name = prev.value("name", "");
-        return logPlayer.insert(0, name);
+        return logPlayer->insert(0, name);
     }
     return {-1, CODE_HISTORIC_INVALID, "Accion no soportada para TEAM" };
 }
@@ -83,17 +95,17 @@ BackendResponse LogHistoric::undoPetition(Historic& h) {
     }
 
     if (h.actionType == "INSERT") {
-        return logPetition.eliminar(h.recordId);
+        return logPetition->eliminar(h.recordId);
     }
     else if (h.actionType == "UPDATE") {
         string responseText = prev.value("response", "");
-        return logPetition.update(h.recordId, responseText);
+        return logPetition->update(h.recordId, responseText);
     }
     else if (h.actionType == "DELETE") {
         string requesterName = prev.value("requesterName", "");
         string type = prev.value("type", "");
         string description = prev.value("description", "");
-        return logPetition.insert(requesterName, type, description);
+        return logPetition->insert(requesterName, type, description);
     }
 
     return { -1, CODE_HISTORIC_INVALID, "Accion no soportada para PETITION" };

@@ -7,8 +7,6 @@
 #include "dbResponse.h"
 #include "dbQueryResponse.h"
 #include "connection.h"
-#include "logPlayer.h"
-#include "logPetition.h"
 #include "codes.h"
 #include "json.hpp"
 #include "factories.h"
@@ -17,16 +15,21 @@
 using namespace std;
 using json = nlohmann::json;
 
+class LogPlayer;
+class LogPetition;
+
 class LogHistoric {
 private:
     Connection& connection;
-    LogPlayer& logPlayer;
-    LogPetition& logPetition;
+    LogPlayer* logPlayer;
+    LogPetition* logPetition;
 
 public:
-    LogHistoric(Connection& dbConnection, LogPlayer& player, LogPetition& petition);
+    LogHistoric(Connection& dbConnection);
 
-    BackendResponse insert(Historic& h);
+    void setLogPlayer(LogPlayer* player);
+    void setLogPetition(LogPetition* petition);
+    BackendResponse insert(Historic h);
     BackendResponse undo();
 
 private:
