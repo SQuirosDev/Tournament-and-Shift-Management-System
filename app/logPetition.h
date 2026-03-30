@@ -6,10 +6,15 @@
 #include "backendQueryResponse.h"
 #include "Petitions.h"
 
+using namespace std;
+
+class LogHistoric;
+
 class LogPetition {
 public:
     LogPetition(Connection& dbConnection);
 
+    void setLogHistoric(LogHistoric* historic);
     BackendResponse insert(string requesterName, string type, string description);
     BackendResponse update(int id, string responseText);
     BackendQueryResponse<Petition> peekNextPetition();
@@ -20,4 +25,5 @@ public:
 
 private:
     Connection& connection_;
+    LogHistoric* logHistoric;
 };

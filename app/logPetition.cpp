@@ -1,8 +1,15 @@
 #include <sstream>
 #include "logPetition.h"
+#include "LogHistoric.h"
 #include "factories.h"
 
-LogPetition::LogPetition(Connection& dbConnection) : connection_(dbConnection) {}
+LogPetition::LogPetition(Connection& dbConnection) : connection_(dbConnection) {
+    logHistoric = nullptr;
+}
+
+void LogPetition::setLogHistoric(LogHistoric* historic) {
+    logHistoric = historic;
+}
 
 BackendResponse LogPetition::insert(string requesterName, string type, string description) {
 
@@ -14,22 +21,50 @@ BackendResponse LogPetition::insert(string requesterName, string type, string de
         return { -1, CODE_PETITION_INVALID_DATA, "Tipo de petición inválido. Use: Inscripcion, Consulta o Apelacion." };
     }
 
-    return dbResponseFactory(connection_.insertPetition(requesterName, type, description));
+    BackendResponse response = dbResponseFactory(connection_.insertPetition(requesterName, type, description));
+
+    if (response.id <= 0) {
+        return response;
+    }
+
+    string newData = "{ \"id\": " + to_string(response.id) + ", \"requesterName\": \"" + requesterName + "\", \"type\": \"" + type + "\", \"description\": \"" + description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+
+    logHistoric->insert(historicFactory("Insert", "Petition", response.id, "{}", newData));
+
+    return response;
 }
 
 BackendResponse LogPetition::update(int id, string responseText) {
+
+    if (id <= 0) {
+        return { -1, 400, "El ID del jugador no es válido." };
+    }
 
     if (responseText.empty()) {
         return { -1, CODE_PETITION_INVALID_DATA, "La respuesta no puede estar vacía." };
     }
 
-    DbResponse updateResponse = connection_.updatePetitionStatus(id, responseText, "Atendida");
+    BackendQueryResponse<Petition> queryResponse = dbQueryResponseFactory<Petition>(connection_.obtainPetitionById(id));
 
-    if (updateResponse.code != CODE_OK && updateResponse.code != CODE_UPDATE_OK) {
-        return dbResponseFactory(updateResponse);
+    if (queryResponse.data.empty()) {
+        return { -1, 404, "Jugador no encontrado." };
     }
 
-    return { updateResponse.id, CODE_PETITION_ATTENDED, "Petición atendida correctamente." };
+    Petition petition = queryResponse.data[0];
+
+    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+    string newData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+
+
+    BackendResponse response = dbResponseFactory(connection_.updatePetitionStatus(id, responseText, "Atendida"));
+
+    if (response.id <= 0) {
+        return response;
+    }
+
+    logHistoric->insert(historicFactory("Update", "Petition", response.id, previousData, newData));
+
+    return response;
 }
 
 BackendQueryResponse<Petition> LogPetition::peekNextPetition() {
@@ -50,7 +85,29 @@ BackendQueryResponse<Petition> LogPetition::listPendingPetitions() {
 
 BackendResponse LogPetition::eliminar(int id)
 {
-    return BackendResponse();
+    if (id <= 0) {
+        return { -1, 400, "El ID del jugador no es válido." };
+    }
+
+    BackendQueryResponse<Petition> queryResponse = dbQueryResponseFactory<Petition>(connection_.obtainPetitionById(id));
+
+    if (queryResponse.data.empty()) {
+        return { -1, 404, "Jugador no encontrado." };
+    }
+
+    Petition petition = queryResponse.data[0];
+
+    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+
+    BackendResponse response = dbResponseFactory(connection_.deletePetition(id));
+
+    if (response.id <= 0) {
+        return response;
+    }
+
+    logHistoric->insert(historicFactory("Delete", "Player", response.id, previousData, "{}"));
+
+    return response;
 }
 
 int LogPetition::pendingCount() {

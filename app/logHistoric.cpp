@@ -69,14 +69,14 @@ BackendResponse LogHistoric::undoPlayer(Historic& h) {
         return { -1, CODE_HISTORIC_INVALID, "Error parseando JSON en previousData" };
     }
 
-    if (h.actionType == "INSERT") {
+    if (h.actionType == "Insert") {
         return logPlayer->eliminar(h.recordId);
     }
-    else if (h.actionType == "UPDATE") {
+    else if (h.actionType == "Update") {
         string name = prev.value("name", "");
         return logPlayer->update(h.recordId, name);
     }
-    else if (h.actionType == "DELETE") 
+    else if (h.actionType == "Delete") 
     {
         string name = prev.value("name", "");
         return logPlayer->insert(0, name);
@@ -94,14 +94,14 @@ BackendResponse LogHistoric::undoPetition(Historic& h) {
         return { -1, CODE_HISTORIC_INVALID, "Error parseando JSON en previousData" };
     }
 
-    if (h.actionType == "INSERT") {
+    if (h.actionType == "Insert") {
         return logPetition->eliminar(h.recordId);
     }
-    else if (h.actionType == "UPDATE") {
+    else if (h.actionType == "Update") {
         string responseText = prev.value("response", "");
         return logPetition->update(h.recordId, responseText);
     }
-    else if (h.actionType == "DELETE") {
+    else if (h.actionType == "Delete") {
         string requesterName = prev.value("requesterName", "");
         string type = prev.value("type", "");
         string description = prev.value("description", "");

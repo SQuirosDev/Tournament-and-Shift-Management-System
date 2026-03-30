@@ -1510,6 +1510,62 @@ DBQueryResponse<Petition> Connection::listPendingPetitions() {
     }
 }
 
+DBQueryResponse<Petition> Connection::obtainPetitionById(int id) {
+    DBQueryResponse<Petition> queryResult;
+    try {
+        // Buscar la peticion por su ID
+        const char* sqlQuery = "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION FROM TB_PETITION WHERE ID = ?;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        // Compilar la query
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainPetitionById::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
+        }
+
+        // Reemplazar el ? con el ID recibido
+        sqlite3_bind_int(sqlStatement, 1, id);
+
+        // Si no retorna ninguna fila, la peticion no existe
+        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
+            sqlite3_finalize(sqlStatement);
+            queryResult.code = CODE_PETITION_NOT_FOUND;
+            queryResult.message = "Peticion con ID " + to_string(id) + " no encontrada";
+            return queryResult;
+        }
+
+        // Mapear las columnas al struct de salida
+        Petition petitionRow;
+        petitionRow.id = sqlite3_column_int(sqlStatement, 0);
+        petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+        petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+        petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
+        petitionRow.response = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+        petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 5));
+        petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 6);
+
+        sqlite3_finalize(sqlStatement);
+
+        queryResult.data.push_back(petitionRow);
+        queryResult.code = CODE_PETITION_LISTED;
+        queryResult.message = "Peticion encontrada";
+        return queryResult;
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en obtainPetitionById";
+        return queryResult;
+    }
+    catch (...) {
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en obtainPetitionById";
+        return queryResult;
+    }
+}
+
 DBQueryResponse<Petition> Connection::obtainNextPetition() {
     DBQueryResponse<Petition> queryResult;
     try {
@@ -1612,6 +1668,44 @@ DbResponse Connection::updatePetitionStatus(int id, string response, string stat
     }
     catch (...) {
         return { -1, CODE_EXCEPTION, "Excepcion desconocida en updatePetitionStatus" };
+    }
+}
+
+DbResponse Connection::deletePetition(int id) {
+    try {
+        // Validacion: verificar que la peticion exista antes de eliminarla
+        string checkExistQuery = "SELECT COUNT(*) FROM TB_PETITION WHERE ID = " + to_string(id) + ";";
+        if (!rowExists(db_, checkExistQuery)) {
+            return { -1, CODE_PETITION_NOT_FOUND, "Peticion con ID " + to_string(id) + " no encontrada" };
+        }
+
+        // Eliminar la peticion por su ID
+        const char* sqlQuery = "DELETE FROM TB_PETITION WHERE ID = ?;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        // Compilar la query
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            return sqliteError(CODE_DB_PREPARE_ERROR, "deletePetition::prepare");
+        }
+
+        // Reemplazar el ? con el ID de la peticion a eliminar
+        sqlite3_bind_int(sqlStatement, 1, id);
+
+        int resultCode = sqlite3_step(sqlStatement);
+        sqlite3_finalize(sqlStatement);
+
+        if (resultCode != SQLITE_DONE) {
+            return sqliteError(CODE_DB_STEP_ERROR, "deletePetition::step");
+        }
+
+        return { id, 400, "Peticion eliminada exitosamente" };
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        return { -1, CODE_EXCEPTION, "Excepcion no esperada en deletePetition" };
+    }
+    catch (...) {
+        return { -1, CODE_EXCEPTION, "Excepcion desconocida en deletePetition" };
     }
 }
 

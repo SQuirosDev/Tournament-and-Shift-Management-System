@@ -70,6 +70,8 @@ public:
     DBQueryResponse<Petition> listPendingPetitions();
     DBQueryResponse<Petition> obtainNextPetition();
     DbResponse updatePetitionStatus(int id, string response, string status);
+    DBQueryResponse<Petition> obtainPetitionById(int id);
+    DbResponse deletePetition(int id);
 
     // ============================================================
     //  TB_HISTORIC (Pila / Deshacer)
