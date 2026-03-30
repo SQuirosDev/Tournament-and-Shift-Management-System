@@ -9,10 +9,13 @@
 
 using namespace std;
 
+class LogHistoric;
+
 class LogPlayer {
 public:
     LogPlayer(Connection& dbConnection);
 
+    void setLogHistoric(LogHistoric* historic);
     BackendResponse insert(int teamId, string playerName);
     BackendQueryResponse<Player> listByTeam(int teamId);
     BackendQueryResponse<Player> getById(int playerId, Player& outputRow);
@@ -21,4 +24,5 @@ public:
 
 private:
     Connection& connection_;
+    LogHistoric* logHistoric;
 };

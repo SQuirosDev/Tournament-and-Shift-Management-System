@@ -5,6 +5,7 @@
 #include "dbQueryResponse.h"
 #include "backendResponse.h"
 #include "backendQueryResponse.h"
+#include "Historics.h"
 
 using namespace std;
 
@@ -20,3 +21,5 @@ BackendQueryResponse<T> dbQueryResponseFactory(DBQueryResponse<T> dbRes)
     backendRes.message = dbRes.message;
     return backendRes;
 }
+
+Historic historicFactory(string action, string entity, int id, string previousData, string newData);

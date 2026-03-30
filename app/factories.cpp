@@ -8,3 +8,14 @@ BackendResponse dbResponseFactory(DbResponse dbRes)
     backendRes.message = dbRes.message;
     return backendRes;
 }
+
+Historic historicFactory(string action, string entity, int id, string previousData, string newData) {
+    Historic historic;
+    historic.actionType = action;
+    historic.entityType = entity;
+    historic.recordId = id;
+    historic.previousData = previousData;
+    historic.newData = newData;
+    historic.stackPosition = 0;
+    return historic;
+}
