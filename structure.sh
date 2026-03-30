@@ -3,9 +3,10 @@ app/
 ├───main.cpp
 ├───torneos.db
 │
-├───data/ # Pila y Cola Generica (Nose para que seran)
-│   ├───stack.h ?
-│   └───queue.h ?
+├───data/
+│   ├───stackHistoric.h ✅
+│   ├───stackHistoric.cpp ✅
+│   └───queue.h
 │
 ├───models/ # Estructuras
 │   ├───tournaments.h ✅
