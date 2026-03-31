@@ -502,6 +502,63 @@ DbResponse Connection::insertTeam(string name, int tournamentId) {
     }
 }
 
+DBQueryResponse<Team> Connection::listAllTeams() {
+    DBQueryResponse<Team> queryResult;
+
+    try {
+        queryResult.data.clear();
+
+        const char* sqlQuery = "SELECT ID, TOURNAMENT_ID, NAME, TOURNAMENTS, POINTS, WINS, DRAWS, LOSSES FROM TB_TEAM ORDER BY ID;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listAllTeams::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
+        }
+
+        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
+            Team teamRow;
+
+            teamRow.id = sqlite3_column_int(sqlStatement, 0);
+            teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+            teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+            teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
+            teamRow.points = sqlite3_column_int(sqlStatement, 4);
+            teamRow.wins = sqlite3_column_int(sqlStatement, 5);
+            teamRow.draws = sqlite3_column_int(sqlStatement, 6);
+            teamRow.losses = sqlite3_column_int(sqlStatement, 7);
+
+            queryResult.data.push_back(teamRow);
+        }
+
+        sqlite3_finalize(sqlStatement);
+
+        queryResult.code = CODE_TEAM_LISTED;
+
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay equipos registrados";
+        }
+        else {
+            queryResult.message = "Equipos obtenidos: " + to_string(queryResult.data.size());
+        }
+
+        return queryResult;
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listAllTeams";
+        return queryResult;
+    }
+    catch (...) {
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listAllTeams";
+        return queryResult;
+    }
+}
+
 DBQueryResponse<Team> Connection::listTeamsByTournament(int tournamentId) {
     DBQueryResponse<Team> queryResult;
     try {
@@ -811,6 +868,57 @@ DbResponse Connection::insertPlayer(string name, int teamId) {
     }
 }
 
+DBQueryResponse<Player> Connection::listAllPlayers() {
+    DBQueryResponse<Player> queryResult;
+
+    try {
+        queryResult.data.clear();
+
+        const char* sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER ORDER BY ID;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listAllPlayers::prepare");
+            queryResult.code = errorResponse.code;
+            queryResult.message = errorResponse.message;
+            return queryResult;
+        }
+
+        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
+            Player playerRow;
+
+            playerRow.id = sqlite3_column_int(sqlStatement, 0);
+            playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
+            playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+
+            queryResult.data.push_back(playerRow);
+        }
+
+        sqlite3_finalize(sqlStatement);
+
+        queryResult.code = CODE_PLAYER_LISTED;
+        if (queryResult.data.empty()) {
+            queryResult.message = "No hay jugadores registrados";
+        }
+        else {
+            queryResult.message = "Jugadores obtenidos: " + to_string(queryResult.data.size());
+        }
+
+        return queryResult;
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion no esperada en listAllPlayers";
+        return queryResult;
+    }
+    catch (...) {
+        queryResult.code = CODE_EXCEPTION;
+        queryResult.message = "Excepcion desconocida en listAllPlayers";
+        return queryResult;
+    }
+}
+
 DBQueryResponse<Player> Connection::listPlayersByTeam(int teamId) {
     DBQueryResponse<Player> queryResult;
     try {
@@ -967,6 +1075,42 @@ DbResponse Connection::updatePlayer(int id, string name) {
     }
     catch (...) {
         return { -1, CODE_EXCEPTION, "Excepcion desconocida en updatePlayer" };
+    }
+}
+
+DbResponse Connection::updatePlayerTeam(int playerId, int teamId) {
+    try {
+        // Validacion: verificar que el jugador exista
+        string checkPlayerQuery = "SELECT COUNT(*) FROM TB_PLAYER WHERE ID = " + to_string(playerId) + ";";
+        if (!rowExists(db_, checkPlayerQuery)) {
+            return { -1, CODE_PLAYER_NOT_FOUND, "Jugador con ID " + to_string(playerId) + " no encontrado" };
+        }
+
+        const char* sqlQuery = "UPDATE TB_PLAYER SET TEAM_ID = ? WHERE ID = ?;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            return sqliteError(CODE_DB_PREPARE_ERROR, "updatePlayerTeam::prepare");
+        }
+
+        sqlite3_bind_int(sqlStatement, 1, teamId);
+        sqlite3_bind_int(sqlStatement, 2, playerId);
+
+        if (sqlite3_step(sqlStatement) != SQLITE_DONE) {
+            sqlite3_finalize(sqlStatement);
+            return sqliteError(CODE_DB_STEP_ERROR, "updatePlayerTeam::step");
+        }
+
+        sqlite3_finalize(sqlStatement);
+
+        return { 1, CODE_PLAYER_UPDATED, "Equipo del jugador actualizado correctamente" };
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        return { -1, CODE_EXCEPTION, "Excepcion en updatePlayerTeam" };
+    }
+    catch (...) {
+        return { -1, CODE_EXCEPTION, "Excepcion desconocida en updatePlayerTeam" };
     }
 }
 

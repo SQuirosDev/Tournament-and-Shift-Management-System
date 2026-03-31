@@ -108,6 +108,7 @@
     <ClCompile Include="logHistoric.cpp" />
     <ClCompile Include="logPetition.cpp" />
     <ClCompile Include="logPlayer.cpp" />
+    <ClCompile Include="logTeam.cpp" />
     <ClCompile Include="sqlite3.c" />
     <ClCompile Include="stackHistoric.cpp" />
     <ClCompile Include="validations.cpp" />

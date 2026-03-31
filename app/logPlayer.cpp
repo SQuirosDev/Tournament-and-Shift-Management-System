@@ -13,7 +13,7 @@ void LogPlayer::setLogHistoric(LogHistoric* historic) {
 
 BackendResponse LogPlayer::insert(int teamId, string playerName) {
 
-    if (teamId <= 0) {
+    if (teamId < 0) {
         return { -1, 400, "El ID del equipo no es válido." };
     }
 

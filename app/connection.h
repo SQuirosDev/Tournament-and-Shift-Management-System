@@ -38,6 +38,7 @@ public:
     //  TB_TEAM
     // ============================================================
     DbResponse insertTeam(string name, int tournamentId);
+    DBQueryResponse<Team> listAllTeams();
     DBQueryResponse<Team> listTeamsByTournament(int tournamentId);
     DBQueryResponse<Team> obtainTeamById(int id);
     DbResponse updateTeam(int id, string newName);
@@ -48,9 +49,11 @@ public:
     //  TB_PLAYER
     // ============================================================
     DbResponse insertPlayer(string name, int teamId);
+    DBQueryResponse<Player> listAllPlayers();
     DBQueryResponse<Player> listPlayersByTeam(int teamId);
     DBQueryResponse<Player> obtainPlayerById(int id);
     DbResponse updatePlayer(int id, string name);
+    DbResponse updatePlayerTeam(int playerId, int teamId);
     DbResponse deletePlayer(int id);
 
     // ============================================================
