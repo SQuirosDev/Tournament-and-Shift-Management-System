@@ -1,3 +1,4 @@
+#include <vector>
 #include "logPlayer.h"
 #include "LogHistoric.h"
 #include "validations.h"
@@ -13,17 +14,17 @@ void LogPlayer::setLogHistoric(LogHistoric* historic) {
 
 BackendResponse LogPlayer::insert(int teamId, string playerName) {
 
-    if (teamId < 0) {
-        return { -1, 400, "El ID del equipo no es válido." };
+    if (teamId <= 0) {
+        return { -1, CODE_PLAYER_INVALID_DATA, "El ID del equipo no es válido." };
     }
 
     if (!isValidName(playerName)) {
-        return { 0, 400, "El nombre del jugador no puede estar vacío." };
+        return { 0, CODE_PLAYER_INVALID_DATA, "El nombre del jugador no puede estar vacío." };
     }
 
     BackendResponse response = dbResponseFactory(connection_.insertPlayer(playerName, teamId));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -37,16 +38,16 @@ BackendResponse LogPlayer::insert(int teamId, string playerName) {
 BackendQueryResponse<Player> LogPlayer::listByTeam(int teamId) {
 
     if (teamId <= 0) {
-        return { {}, 400, "El ID del equipo no es válido." };
+        return { {}, CODE_PLAYER_INVALID_DATA, "El ID del equipo no es válido." };
     }
 
     return dbQueryResponseFactory<Player>(connection_.listPlayersByTeam(teamId));
 }
 
-BackendQueryResponse<Player> LogPlayer::getById(int playerId, Player& outputRow) {
+BackendQueryResponse<Player> LogPlayer::getById(int playerId) {
 
     if (playerId <= 0) {
-        return { {}, 400, "El ID del jugador no es válido." };
+        return { {}, CODE_PLAYER_INVALID_DATA, "El ID del jugador no es válido." };
     }
 
     return dbQueryResponseFactory<Player>(connection_.obtainPlayerById(playerId));
@@ -55,17 +56,17 @@ BackendQueryResponse<Player> LogPlayer::getById(int playerId, Player& outputRow)
 BackendResponse LogPlayer::update(int playerId, string newName) {
 
     if (playerId <= 0) {
-        return { -1, 400, "El ID del jugador no es válido." };
+        return { -1, CODE_PLAYER_INVALID_DATA, "El ID del jugador no es válido." };
     }
 
     if (!isValidName(newName)) {
-        return { -1, 400, "El nombre del jugador no puede estar vacío." };
+        return { -1, CODE_PLAYER_INVALID_DATA, "El nombre del jugador no puede estar vacío." };
     }
 
     BackendQueryResponse<Player> queryResponse = dbQueryResponseFactory<Player>(connection_.obtainPlayerById(playerId));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Jugador no encontrado." };
+        return { -1, CODE_PLAYER_NOT_FOUND, "Jugador no encontrado." };
     }
 
     Player player = queryResponse.data[0];
@@ -75,7 +76,7 @@ BackendResponse LogPlayer::update(int playerId, string newName) {
 
     BackendResponse response = dbResponseFactory(connection_.updatePlayer(playerId, newName));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -87,13 +88,13 @@ BackendResponse LogPlayer::update(int playerId, string newName) {
 BackendResponse LogPlayer::eliminar(int playerId) {
 
     if (playerId <= 0) {
-        return { -1, 400, "El ID del jugador no es válido." };
+        return { -1, CODE_PLAYER_INVALID_DATA, "El ID del jugador no es válido." };
     }
 
     BackendQueryResponse<Player> queryResponse = dbQueryResponseFactory<Player>(connection_.obtainPlayerById(playerId));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Jugador no encontrado." };
+        return { -1, CODE_PLAYER_NOT_FOUND, "Jugador no encontrado." };
     }
 
     Player player = queryResponse.data[0];
@@ -102,7 +103,7 @@ BackendResponse LogPlayer::eliminar(int playerId) {
 
     BackendResponse response = dbResponseFactory(connection_.deletePlayer(playerId));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 

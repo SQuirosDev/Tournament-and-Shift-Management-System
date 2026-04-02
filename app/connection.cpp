@@ -53,7 +53,7 @@ DbResponse Connection::open(string dbPath) {
         int resultCode = sqlite3_open(dbPath.c_str(), &db_);
 
         if (resultCode != SQLITE_OK) {
-            return sqliteError(CODE_DB_CONNECTION_ERROR, "open");
+            return sqliteError(CODE_ERROR_DB_CONNECTION, "open");
         }
 
         sqlite3_exec(db_, "PRAGMA FOREIGN_KEYS = ON;", nullptr, nullptr, nullptr);
@@ -101,7 +101,7 @@ DbResponse Connection::initTables() {
             "  NAME TEXT NOT NULL CHECK(NAME != ''),"
             "  PHASE TEXT NOT NULL DEFAULT 'Registro' CHECK(PHASE IN ('Registro', 'Grupos', 'Eliminacion', 'Finalizado'))"
             ");"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_TOURNAMENT");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_TOURNAMENT");
 
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_TEAM ("
@@ -114,7 +114,7 @@ DbResponse Connection::initTables() {
             "  DRAWS INTEGER NOT NULL DEFAULT 0 CHECK(DRAWS >= 0),"
             "  LOSSES INTEGER NOT NULL DEFAULT 0 CHECK(LOSSES >= 0)"
             ");"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_TEAM");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_TEAM");
 
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_PLAYER ("
@@ -122,7 +122,7 @@ DbResponse Connection::initTables() {
             "  TEAM_ID INTEGER NOT NULL REFERENCES TB_TEAM(ID) ON DELETE CASCADE,"
             "  NAME TEXT NOT NULL CHECK(NAME != '')"
             ");"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_PLAYER");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_PLAYER");
 
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_MATCH ("
@@ -139,7 +139,7 @@ DbResponse Connection::initTables() {
             "  PLAYED_AT TEXT,"
             "  CHECK(TEAM_A_ID != TEAM_B_ID)"
             ");"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_MATCH");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_MATCH");
 
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_PETITION ("
@@ -151,7 +151,7 @@ DbResponse Connection::initTables() {
             "  STATUS TEXT NOT NULL DEFAULT 'Pendiente' CHECK(STATUS IN ('Pendiente', 'Atendida', 'Cancelada')),"
             "  QUEUE_POSITION INTEGER NOT NULL DEFAULT 0"
             ");"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_PETITION");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_PETITION");
 
         if (!execSimple(db_,
             "CREATE TABLE IF NOT EXISTS TB_HISTORIC ("
@@ -164,27 +164,27 @@ DbResponse Connection::initTables() {
             "  STACK_POSITION INTEGER NOT NULL DEFAULT 0"
             ");"))
 
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::TB_HISTORIC");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_HISTORIC");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_TEAM_TOURNAMENT ON TB_TEAM(TOURNAMENT_ID);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_TEAM_TOURNAMENT");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_TEAM_TOURNAMENT");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PLAYER_TEAM ON TB_PLAYER(TEAM_ID);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_PLAYER_TEAM");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_PLAYER_TEAM");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_TOURNAMENT ON TB_MATCH(TOURNAMENT_ID, QUEUE_POSITION);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_MATCH_TOURNAMENT");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_MATCH_TOURNAMENT");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_STATUS ON TB_MATCH(TOURNAMENT_ID, PHASE, STATUS);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_MATCH_STATUS");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_MATCH_STATUS");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PETITION_QUEUE ON TB_PETITION(STATUS, QUEUE_POSITION);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_PETITION_QUEUE");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_PETITION_QUEUE");
 
         if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_HISTORIC_STACK ON TB_HISTORIC(TOURNAMENT_ID, STACK_POSITION DESC);"))
-            return sqliteError(CODE_DB_INIT_ERROR, "initTables::IDX_HISTORIC_STACK");
+            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_HISTORIC_STACK");
 
-        return { 1, CODE_OK, "Base de datos inicializada correctamente" };
+        return { 1, CODE_SUCCESS, "Base de datos inicializada correctamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -219,7 +219,7 @@ DbResponse Connection::insertTournament(string name) {
 
         // Compilar la query y dejarla lista para ejecutar
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertTournament::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertTournament::prepare");
         }
 
         // Reemplazar el primer ? con el valor real de name
@@ -233,7 +233,7 @@ DbResponse Connection::insertTournament(string name) {
 
         // Verificar que el INSERT se ejecuto correctamente
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertTournament::step");
+            return sqliteError(CODE_ERROR_DB, "insertTournament::step");
         }
 
         // Obtener el ID que SQLite asigno automaticamente al nuevo registro
@@ -258,7 +258,7 @@ DBQueryResponse<Tournament> Connection::listTournaments() {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listTournaments::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listTournaments::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -309,7 +309,7 @@ DBQueryResponse<Tournament> Connection::obtainTournamentById(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainTournamentById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainTournamentById::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -370,7 +370,7 @@ DbResponse Connection::updateTournamentPhase(int id, string phase) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updateTournamentPhase::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentPhase::prepare");
         }
 
         // Enlazar parametros: primer ? = phase, segundo ? = id
@@ -381,7 +381,7 @@ DbResponse Connection::updateTournamentPhase(int id, string phase) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updateTournamentPhase::step");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentPhase::step");
         }
 
         return { id, CODE_TOURNAMENT_UPDATED, "Fase del torneo actualizada a: " + phase };
@@ -420,7 +420,7 @@ DbResponse Connection::updateTournamentName(int id, string newName) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updateTournamentName::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentName::prepare");
         }
 
         // Enlazar parametros: primer ? = newName, segundo ? = id
@@ -431,7 +431,7 @@ DbResponse Connection::updateTournamentName(int id, string newName) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updateTournamentName::step");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentName::step");
         }
 
         return { id, CODE_TOURNAMENT_UPDATED, "Nombre del torneo actualizado" };
@@ -475,7 +475,7 @@ DbResponse Connection::insertTeam(string name, int tournamentId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertTeam::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertTeam::prepare");
         }
 
         // Enlazar parametros: primer ? = name, segundo ? = tournamentId
@@ -486,7 +486,7 @@ DbResponse Connection::insertTeam(string name, int tournamentId) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertTeam::step");
+            return sqliteError(CODE_ERROR_DB, "insertTeam::step");
         }
 
         // Obtener el ID asignado automaticamente por SQLite
@@ -512,7 +512,7 @@ DBQueryResponse<Team> Connection::listAllTeams() {
         sqlite3_stmt* sqlStatement = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listAllTeams::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listAllTeams::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -578,7 +578,7 @@ DBQueryResponse<Team> Connection::listTeamsByTournament(int tournamentId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listTeamsByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listTeamsByTournament::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -638,7 +638,7 @@ DBQueryResponse<Team> Connection::obtainTeamById(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainTeamById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainTeamById::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -704,7 +704,7 @@ DbResponse Connection::updateTeam(int id, string newName) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updateTeam::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateTeam::prepare");
         }
 
         // Enlazar parametros: primer ? = newName, segundo ? = id
@@ -715,7 +715,7 @@ DbResponse Connection::updateTeam(int id, string newName) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updateTeam::step");
+            return sqliteError(CODE_ERROR_DB, "updateTeam::step");
         }
 
         return { id, CODE_TEAM_UPDATED, "Equipo actualizado exitosamente" };
@@ -744,7 +744,7 @@ DbResponse Connection::updateTeamStats(int id, int points, int wins, int draws, 
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updateTeamStats::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateTeamStats::prepare");
         }
 
         // Enlazar cada estadistica en el orden de los ? en la query
@@ -758,7 +758,7 @@ DbResponse Connection::updateTeamStats(int id, int points, int wins, int draws, 
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updateTeamStats::step");
+            return sqliteError(CODE_ERROR_DB, "updateTeamStats::step");
         }
 
         return { id, CODE_TEAM_UPDATED, "Estadisticas del equipo actualizadas" };
@@ -787,7 +787,7 @@ DbResponse Connection::deleteTeam(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deleteTeam::prepare");
+            return sqliteError(CODE_ERROR_DB, "deleteTeam::prepare");
         }
 
         // Reemplazar el ? con el ID del equipo a eliminar
@@ -797,7 +797,7 @@ DbResponse Connection::deleteTeam(int id) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deleteTeam::step");
+            return sqliteError(CODE_ERROR_DB, "deleteTeam::step");
         }
 
         return { id, CODE_TEAM_DELETED, "Equipo eliminado exitosamente" };
@@ -841,7 +841,7 @@ DbResponse Connection::insertPlayer(string name, int teamId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertPlayer::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertPlayer::prepare");
         }
 
         // Enlazar parametros: primer ? = name, segundo ? = teamId
@@ -852,7 +852,7 @@ DbResponse Connection::insertPlayer(string name, int teamId) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertPlayer::step");
+            return sqliteError(CODE_ERROR_DB, "insertPlayer::step");
         }
 
         // Obtener el ID asignado automaticamente por SQLite
@@ -878,7 +878,7 @@ DBQueryResponse<Player> Connection::listAllPlayers() {
         sqlite3_stmt* sqlStatement = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listAllPlayers::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listAllPlayers::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -939,7 +939,7 @@ DBQueryResponse<Player> Connection::listPlayersByTeam(int teamId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listPlayersByTeam::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listPlayersByTeam::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -992,7 +992,7 @@ DBQueryResponse<Player> Connection::obtainPlayerById(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainPlayerById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainPlayerById::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1053,7 +1053,7 @@ DbResponse Connection::updatePlayer(int id, string name) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updatePlayer::prepare");
+            return sqliteError(CODE_ERROR_DB, "updatePlayer::prepare");
         }
 
         // Enlazar parametros: primer ? = name, segundo ? = id
@@ -1064,7 +1064,7 @@ DbResponse Connection::updatePlayer(int id, string name) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updatePlayer::step");
+            return sqliteError(CODE_ERROR_DB, "updatePlayer::step");
         }
 
         return { id, CODE_PLAYER_UPDATED, "Jugador actualizado exitosamente" };
@@ -1090,7 +1090,7 @@ DbResponse Connection::updatePlayerTeam(int playerId, int teamId) {
         sqlite3_stmt* sqlStatement = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updatePlayerTeam::prepare");
+            return sqliteError(CODE_ERROR_DB, "updatePlayerTeam::prepare");
         }
 
         sqlite3_bind_int(sqlStatement, 1, teamId);
@@ -1098,7 +1098,7 @@ DbResponse Connection::updatePlayerTeam(int playerId, int teamId) {
 
         if (sqlite3_step(sqlStatement) != SQLITE_DONE) {
             sqlite3_finalize(sqlStatement);
-            return sqliteError(CODE_DB_STEP_ERROR, "updatePlayerTeam::step");
+            return sqliteError(CODE_ERROR_DB, "updatePlayerTeam::step");
         }
 
         sqlite3_finalize(sqlStatement);
@@ -1128,7 +1128,7 @@ DbResponse Connection::deletePlayer(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deletePlayer::prepare");
+            return sqliteError(CODE_ERROR_DB, "deletePlayer::prepare");
         }
 
         // Reemplazar el ? con el ID del jugador a eliminar
@@ -1138,7 +1138,7 @@ DbResponse Connection::deletePlayer(int id) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deletePlayer::step");
+            return sqliteError(CODE_ERROR_DB, "deletePlayer::step");
         }
 
         return { id, CODE_PLAYER_DELETED, "Jugador eliminado exitosamente" };
@@ -1183,7 +1183,7 @@ DbResponse Connection::insertMatch(int tournamentId, int teamAId, int teamBId, s
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertMatch::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertMatch::prepare");
         }
 
         // Enlazar cada parametro en el orden de los ? en la query
@@ -1198,7 +1198,7 @@ DbResponse Connection::insertMatch(int tournamentId, int teamAId, int teamBId, s
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertMatch::step");
+            return sqliteError(CODE_ERROR_DB, "insertMatch::step");
         }
 
         // Obtener el ID asignado automaticamente por SQLite
@@ -1238,7 +1238,7 @@ DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByTournament::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listMatchesByTournament::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1320,7 +1320,7 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listMatchesByPhase::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listMatchesByPhase::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1391,7 +1391,7 @@ DBQueryResponse<Match> Connection::obtainNextMatch(int tournamentId) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextMatch::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainNextMatch::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1468,7 +1468,7 @@ DbResponse Connection::updateMatchResult(int id, string result, int winnerId, in
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updateMatchResult::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateMatchResult::prepare");
         }
 
         // Enlazar parametros en el orden de los ? en la query
@@ -1481,7 +1481,7 @@ DbResponse Connection::updateMatchResult(int id, string result, int winnerId, in
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updateMatchResult::step");
+            return sqliteError(CODE_ERROR_DB, "updateMatchResult::step");
         }
 
         return { id, CODE_MATCH_UPDATED, "Resultado del partido registrado exitosamente" };
@@ -1509,7 +1509,7 @@ DbResponse Connection::deleteMatch(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deleteMatch::prepare");
+            return sqliteError(CODE_ERROR_DB, "deleteMatch::prepare");
         }
 
         // Reemplazar el ? con el ID del partido a eliminar
@@ -1519,7 +1519,7 @@ DbResponse Connection::deleteMatch(int id) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deleteMatch::step");
+            return sqliteError(CODE_ERROR_DB, "deleteMatch::step");
         }
 
         return { id, CODE_MATCH_DELETED, "Partido eliminado exitosamente" };
@@ -1570,7 +1570,7 @@ DbResponse Connection::insertPetition(string requesterName, string type, string 
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertPetition::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertPetition::prepare");
         }
 
         // Enlazar cada parametro en el orden de los ? en la query
@@ -1583,7 +1583,7 @@ DbResponse Connection::insertPetition(string requesterName, string type, string 
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertPetition::step");
+            return sqliteError(CODE_ERROR_DB, "insertPetition::step");
         }
 
         // Obtener el ID asignado automaticamente por SQLite
@@ -1610,7 +1610,7 @@ DBQueryResponse<Petition> Connection::listPendingPetitions() {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listPendingPetitions::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listPendingPetitions::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1663,7 +1663,7 @@ DBQueryResponse<Petition> Connection::obtainPetitionById(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainPetitionById::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainPetitionById::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1721,7 +1721,7 @@ DBQueryResponse<Petition> Connection::obtainNextPetition() {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "obtainNextPetition::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainNextPetition::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1789,7 +1789,7 @@ DbResponse Connection::updatePetitionStatus(int id, string response, string stat
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "updatePetitionStatus::prepare");
+            return sqliteError(CODE_ERROR_DB, "updatePetitionStatus::prepare");
         }
 
         // Enlazar parametros: primer ? = status, segundo ? = id
@@ -1801,7 +1801,7 @@ DbResponse Connection::updatePetitionStatus(int id, string response, string stat
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "updatePetitionStatus::step");
+            return sqliteError(CODE_ERROR_DB, "updatePetitionStatus::step");
         }
 
         return { id, CODE_PETITION_ATTENDED, "Peticion actualizada a: " + status };
@@ -1829,7 +1829,7 @@ DbResponse Connection::deletePetition(int id) {
 
         // Compilar la query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deletePetition::prepare");
+            return sqliteError(CODE_ERROR_DB, "deletePetition::prepare");
         }
 
         // Reemplazar el ? con el ID de la peticion a eliminar
@@ -1839,10 +1839,10 @@ DbResponse Connection::deletePetition(int id) {
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deletePetition::step");
+            return sqliteError(CODE_ERROR_DB, "deletePetition::step");
         }
 
-        return { id, 400, "Peticion eliminada exitosamente" };
+        return { id, CODE_PETITION_DELETED, "Peticion eliminada exitosamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -1863,15 +1863,15 @@ DbResponse Connection::insertHistoric(string actionType, string entityType, int 
     try {
         // Validaciones básicas
         if (actionType.empty()) {
-            return { -1, CODE_HISTORIC_INVALID, "El tipo de accion no puede estar vacio" };
+            return { -1, CODE_HISTORIC_INVALID_DATA, "El tipo de accion no puede estar vacio" };
         }
 
         if (entityType.empty()) {
-            return { -1, CODE_HISTORIC_INVALID, "El tipo de entidad no puede estar vacio" };
+            return { -1, CODE_HISTORIC_INVALID_DATA, "El tipo de entidad no puede estar vacio" };
         }
 
         if (previousData.empty()) {
-            return { -1, CODE_HISTORIC_INVALID, "Los datos previos son necesarios para permitir deshacer" };
+            return { -1, CODE_HISTORIC_INVALID_DATA, "Los datos previos son necesarios para permitir deshacer" };
         }
 
         const char* sqlQuery =
@@ -1882,7 +1882,7 @@ DbResponse Connection::insertHistoric(string actionType, string entityType, int 
         sqlite3_stmt* sqlStatement = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "insertHistoric::prepare");
+            return sqliteError(CODE_ERROR_DB, "insertHistoric::prepare");
         }
 
         sqlite3_bind_text(sqlStatement, 1, actionType.c_str(), -1, SQLITE_STATIC);
@@ -1896,11 +1896,11 @@ DbResponse Connection::insertHistoric(string actionType, string entityType, int 
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "insertHistoric::step");
+            return sqliteError(CODE_ERROR_DB, "insertHistoric::step");
         }
 
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
-        return { insertedId, CODE_OK, "Accion registrada en el historial" };
+        return { insertedId, CODE_SUCCESS, "Accion registrada en el historial" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -1925,7 +1925,7 @@ DBQueryResponse<Historic> Connection::listHistoric() {
         sqlite3_stmt* sqlStatement = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_DB_PREPARE_ERROR, "listHistoric::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listHistoric::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
@@ -1980,7 +1980,7 @@ DbResponse Connection::deleteLastHistoric() {
         sqlite3_stmt* sqlStatementSelect = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQuerySelect, -1, &sqlStatementSelect, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deleteLastHistoric::select::prepare");
+            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::select::prepare");
         }
 
         if (sqlite3_step(sqlStatementSelect) != SQLITE_ROW) {
@@ -1995,7 +1995,7 @@ DbResponse Connection::deleteLastHistoric() {
         sqlite3_stmt* sqlStatementDelete = nullptr;
 
         if (sqlite3_prepare_v2(db_, sqlQueryDelete, -1, &sqlStatementDelete, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_DB_PREPARE_ERROR, "deleteLastHistoric::delete::prepare");
+            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::delete::prepare");
         }
 
         sqlite3_bind_int(sqlStatementDelete, 1, lastHistoricId);
@@ -2004,7 +2004,7 @@ DbResponse Connection::deleteLastHistoric() {
         sqlite3_finalize(sqlStatementDelete);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_DB_STEP_ERROR, "deleteLastHistoric::delete::step");
+            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::delete::step");
         }
 
         return { lastHistoricId, CODE_HISTORIC_DELETED, "Ultima accion eliminada del historial" };

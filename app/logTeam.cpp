@@ -1,3 +1,6 @@
+#include <random>
+#include <vector>
+#include <algorithm>
 #include "logTeam.h"
 #include "LogHistoric.h"
 #include "validations.h"
@@ -13,16 +16,16 @@ void LogTeam::setLogHistoric(LogHistoric* historic) {
 BackendResponse LogTeam::insert(string name, int tournamentId) {
 
     if (tournamentId <= 0) {
-        return { -1, 400, "El ID del torneo no es válido." };
+        return { -1, CODE_TEAM_NOT_FOUND, "El ID del torneo no es válido." };
     }
 
     if (!isValidName(name)) {
-        return { 0, 400, "El nombre del equipo no puede estar vacío." };
+        return { -1, CODE_TEAM_INVALID_DATA, "El nombre del equipo no puede estar vacío."};
     }
 
     BackendResponse response = dbResponseFactory(connection_.insertTeam(name, tournamentId));
 
-    if (response.id == -1) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -42,17 +45,17 @@ BackendQueryResponse<Team> LogTeam::list() {
 BackendResponse LogTeam::update(int id, string newName) {
 
     if (id <= 0) {
-        return { -1, 400, "El ID del equipo no es válido." };
+        return { -1, CODE_TEAM_NOT_FOUND, "El ID del equipo no es válido." };
     }
 
     if (!isValidName(newName)) {
-        return { -1, 400, "El nombre del equipo no puede estar vacío." };
+        return { -1, CODE_TEAM_INVALID_DATA, "El nombre del equipo no puede estar vacío." };
     }
 
     BackendQueryResponse<Team> queryResponse = dbQueryResponseFactory<Team>(connection_.obtainTeamById(id));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Equipo no encontrado." };
+        return { -1, CODE_TEAM_NOT_FOUND, "Equipo no encontrado." };
     }
 
     Team team = queryResponse.data[0];
@@ -62,7 +65,7 @@ BackendResponse LogTeam::update(int id, string newName) {
 
     BackendResponse response = dbResponseFactory(connection_.updateTeam(id, newName));
 
-    if (response.id == -1) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -74,13 +77,13 @@ BackendResponse LogTeam::update(int id, string newName) {
 BackendResponse LogTeam::eliminar(int id) {
 
     if (id <= 0) {
-        return { -1, 400, "El ID del equipo no es válido." };
+        return { -1, CODE_TEAM_NOT_FOUND, "El ID del equipo no es válido." };
     }
 
     BackendQueryResponse<Team> queryResponse = dbQueryResponseFactory<Team>(connection_.obtainTeamById(id));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Equipo no encontrado." };
+        return { -1, CODE_TEAM_INVALID_DATA, "Equipo no encontrado." };
     }
 
     Team team = queryResponse.data[0];
@@ -90,7 +93,7 @@ BackendResponse LogTeam::eliminar(int id) {
 
     BackendResponse response = dbResponseFactory(connection_.deleteTeam(id));
 
-    if (response.id == -1) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -102,24 +105,24 @@ BackendResponse LogTeam::eliminar(int id) {
 BackendResponse LogTeam::generate(int tournamentId) {
     // Obtener jugadores
     BackendQueryResponse playersResponse = dbQueryResponseFactory(connection_.listAllPlayers());
-    if (playersResponse.code != 200) {
+    if (playersResponse.code >= 4000 && playersResponse.code < 5000) {
         return { -1, playersResponse.code, playersResponse.message };
     }
 
     vector<Player> playersList = playersResponse.data;
     if (playersList.size() < 32) {
-        return { -1, -1, "Se requieren minimo 32 jugadores" };
+        return { -1, CODE_TEAM_INVALID_DATA, "Se requieren minimo 32 jugadores" };
     }
 
     // Obtener equipos
     BackendQueryResponse teamsResponse = dbQueryResponseFactory(connection_.listTeamsByTournament(tournamentId));
-    if (teamsResponse.code != 200) {
+    if (teamsResponse.code >= 4000 && teamsResponse.code < 5000) {
         return { -1, teamsResponse.code, teamsResponse.message };
     }
 
     vector<Team> teamsList = teamsResponse.data;
     if (teamsList.size() < 8) {
-        return { -1, -1, "Se requieren minimo 8 equipos" };
+        return { -1, CODE_TEAM_INVALID_DATA, "Se requieren minimo 8 equipos" };
     }
 
     // Mezclar jugadores aleatoriamente
@@ -153,5 +156,5 @@ BackendResponse LogTeam::generate(int tournamentId) {
         connection_.updatePlayerTeam(playerId, teamId);
     }
 
-    return { 1, 200, "Equipos generados correctamente" };
+    return { 1, CODE_TEAM_GENERATE, "Equipos generados correctamente" };
 }

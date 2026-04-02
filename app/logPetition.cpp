@@ -23,7 +23,7 @@ BackendResponse LogPetition::insert(string requesterName, string type, string de
 
     BackendResponse response = dbResponseFactory(connection_.insertPetition(requesterName, type, description));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -37,7 +37,7 @@ BackendResponse LogPetition::insert(string requesterName, string type, string de
 BackendResponse LogPetition::update(int id, string responseText) {
 
     if (id <= 0) {
-        return { -1, 400, "El ID del jugador no es válido." };
+        return { -1, CODE_PETITION_INVALID_DATA, "El ID de la peticion no es válido." };
     }
 
     if (responseText.empty()) {
@@ -47,7 +47,7 @@ BackendResponse LogPetition::update(int id, string responseText) {
     BackendQueryResponse<Petition> queryResponse = dbQueryResponseFactory<Petition>(connection_.obtainPetitionById(id));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Jugador no encontrado." };
+        return { -1, CODE_PETITION_NOT_FOUND, "Peticion no encontrado." };
     }
 
     Petition petition = queryResponse.data[0];
@@ -58,7 +58,7 @@ BackendResponse LogPetition::update(int id, string responseText) {
 
     BackendResponse response = dbResponseFactory(connection_.updatePetitionStatus(id, responseText, "Atendida"));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -69,13 +69,13 @@ BackendResponse LogPetition::update(int id, string responseText) {
 
 BackendQueryResponse<Petition> LogPetition::peekNextPetition() {
 
-    DBQueryResponse obtainResponse = connection_.obtainNextPetition();
+    DBQueryResponse Response = connection_.obtainNextPetition();
 
-    if (obtainResponse.code != CODE_OK && obtainResponse.code != CODE_SELECT_OK) {
+    if (Response.code >= 4000 && Response.code < 5000) {
         return { {}, CODE_PETITION_NOT_FOUND, "No hay solicitudes pendientes en la cola." };
     }
 
-    return dbQueryResponseFactory(obtainResponse);
+    return dbQueryResponseFactory(Response);
 }
 
 BackendQueryResponse<Petition> LogPetition::listPendingPetitions() {
@@ -86,13 +86,13 @@ BackendQueryResponse<Petition> LogPetition::listPendingPetitions() {
 BackendResponse LogPetition::eliminar(int id)
 {
     if (id <= 0) {
-        return { -1, 400, "El ID del jugador no es válido." };
+        return { -1, CODE_PETITION_INVALID_DATA, "El ID de la peticion no es válido." };
     }
 
     BackendQueryResponse<Petition> queryResponse = dbQueryResponseFactory<Petition>(connection_.obtainPetitionById(id));
 
     if (queryResponse.data.empty()) {
-        return { -1, 404, "Jugador no encontrado." };
+        return { -1, CODE_PETITION_NOT_FOUND, "Peticion no encontrado." };
     }
 
     Petition petition = queryResponse.data[0];
@@ -101,7 +101,7 @@ BackendResponse LogPetition::eliminar(int id)
 
     BackendResponse response = dbResponseFactory(connection_.deletePetition(id));
 
-    if (response.id <= 0) {
+    if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
@@ -114,7 +114,7 @@ int LogPetition::pendingCount() {
 
     BackendQueryResponse listResponse = dbQueryResponseFactory(connection_.listPendingPetitions());
 
-    if (listResponse.code != CODE_OK && listResponse.code != CODE_PETITION_LISTED) {
+    if (listResponse.code >= 4000 && listResponse.code < 5000) {
         return 0;
     }
 
