@@ -1,10 +1,17 @@
+#include <string>
+#include <vector>
 #include "logHistoric.h"
+#include "factories.h"
+#include "stackHistoric.h"
+#include "codes.h"
 #include "logPlayer.h"
 #include "logPetition.h"
+#include "logTeam.h"
 
 LogHistoric::LogHistoric(Connection& dbConnection) : connection(dbConnection) {
     logPlayer = nullptr;
     logPetition = nullptr;
+    logTeam = nullptr;
 }
 
 void LogHistoric::setLogPlayer(LogPlayer* player) {
@@ -13,6 +20,10 @@ void LogHistoric::setLogPlayer(LogPlayer* player) {
 
 void LogHistoric::setLogPetition(LogPetition* petition) {
     logPetition = petition;
+}
+
+void LogHistoric::setLogTeam(LogTeam* team) {
+    logTeam = team;
 }
 
 BackendResponse LogHistoric::insert(Historic h) {
@@ -25,7 +36,7 @@ BackendResponse LogHistoric::undo() {
     DBQueryResponse<Historic> res = connection.listHistoric();
 
     if (res.data.empty()) {
-        return {-1, 404, "No hay acciones para deshacer"};
+        return {-1, CODE_HISTORIC_EMPTY, "No hay acciones para deshacer"};
     }
 
     // Crear pila
@@ -47,11 +58,14 @@ BackendResponse LogHistoric::undo() {
     else if (last.entityType == "Petition") {
         undoResponse = undoPetition(last);
     }
+    else if (last.entityType == "Team") {
+        undoResponse = undoTeam(last);
+    }
     else {
-        return {-1,  400, "Entidad no soportada" };
+        return {-1,  CODE_UNDO_NOT_AVAILABLE, "Entidad no soportada" };
     }
 
-    if (undoResponse.id == -1) {
+    if (undoResponse.code >= 4000 && undoResponse.code < 5000) {
         return undoResponse;
     }
 
@@ -66,7 +80,7 @@ BackendResponse LogHistoric::undoPlayer(Historic& h) {
         prev = json::parse(h.previousData);
     }
     catch (...) {
-        return { -1, CODE_HISTORIC_INVALID, "Error parseando JSON en previousData" };
+        return { -1, CODE_HISTORIC_JSON_ERROR, "Error parseando JSON en previousData" };
     }
 
     if (h.actionType == "Insert") {
@@ -81,7 +95,7 @@ BackendResponse LogHistoric::undoPlayer(Historic& h) {
         string name = prev.value("name", "");
         return logPlayer->insert(0, name);
     }
-    return {-1, CODE_HISTORIC_INVALID, "Accion no soportada para TEAM" };
+    return {-1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para TEAM" };
 }
 
 BackendResponse LogHistoric::undoPetition(Historic& h) {
@@ -91,7 +105,7 @@ BackendResponse LogHistoric::undoPetition(Historic& h) {
         prev = json::parse(h.previousData);
     }
     catch (...) {
-        return { -1, CODE_HISTORIC_INVALID, "Error parseando JSON en previousData" };
+        return { -1, CODE_HISTORIC_JSON_ERROR, "Error parseando JSON en previousData" };
     }
 
     if (h.actionType == "Insert") {
@@ -108,5 +122,31 @@ BackendResponse LogHistoric::undoPetition(Historic& h) {
         return logPetition->insert(requesterName, type, description);
     }
 
-    return { -1, CODE_HISTORIC_INVALID, "Accion no soportada para PETITION" };
+    return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };
+}
+
+BackendResponse LogHistoric::undoTeam(Historic& h) {
+    json prev;
+
+    try {
+        prev = json::parse(h.previousData);
+    }
+    catch (...) {
+        return { -1, CODE_HISTORIC_JSON_ERROR, "Error parseando JSON en previousData" };
+    }
+    
+    if (h.actionType == "Insert") {
+        return logTeam->eliminar(h.recordId);
+    }
+    else if (h.actionType == "Update") {
+        string name = prev.value("name", "");
+        return logTeam->update(h.recordId, name);
+    }
+    else if (h.actionType == "Delete") {
+        string name = prev.value("name", "");
+        string tournamentId = prev.value("tournamentId", "");
+        return logTeam->insert(name, stoi(tournamentId) );
+    }
+
+    return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };
 }
