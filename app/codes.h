@@ -1,88 +1,95 @@
 #pragma once
 
-// ============================================================
-//  Prefijos:
-//    1xx  - Exito general
-//    2xx  - Exito por modulo
-//    4xx  - Error de validacion / cliente
-//    5xx  - Error interno / base de datos
-// ============================================================
+// ==========================
+// SUCCESS (2000 - 2999)
+// ==========================
 
-// ----------------------------
-//  GENERAL (1xx)
-// ----------------------------
-#define CODE_OK                         100
-#define CODE_SELECT_OK                  101
-#define CODE_INSERT_OK                  102
-#define CODE_UPDATE_OK                  103
-#define CODE_DELETE_OK                  104
+// --- GENERAL ---
+#define CODE_SUCCESS 2000
 
-// ----------------------------
-//  TOURNAMENT (2xx)
-// ----------------------------
-#define CODE_TOURNAMENT_CREATED         200
-#define CODE_TOURNAMENT_LISTED          201
-#define CODE_TOURNAMENT_UPDATED         202
-#define CODE_TOURNAMENT_NOT_FOUND       400
-#define CODE_TOURNAMENT_DUPLICATE       401
-#define CODE_TOURNAMENT_INVALID_DATA    402
+// --- PLAYER ---
+#define CODE_PLAYER_CREATED 2001
+#define CODE_PLAYER_UPDATED 2002
+#define CODE_PLAYER_DELETED 2003
+#define CODE_PLAYER_LISTED 2004
 
-// ----------------------------
-//  TEAM (21x)
-// ----------------------------
-#define CODE_TEAM_CREATED               210
-#define CODE_TEAM_LISTED                211
-#define CODE_TEAM_UPDATED               212
-#define CODE_TEAM_DELETED               213
-#define CODE_TEAM_NOT_FOUND             410
-#define CODE_TEAM_DUPLICATE             411
-#define CODE_TEAM_INVALID_DATA          412
+// --- TEAM ---
+#define CODE_TEAM_CREATED 2101
+#define CODE_TEAM_UPDATED 2102
+#define CODE_TEAM_DELETED 2103
+#define CODE_TEAM_GENERATE 2103
+#define CODE_TEAM_LISTED 2104
 
-// ----------------------------
-//  PLAYER (22x)
-// ----------------------------
-#define CODE_PLAYER_CREATED             220
-#define CODE_PLAYER_LISTED              221
-#define CODE_PLAYER_UPDATED             222
-#define CODE_PLAYER_DELETED             223
-#define CODE_PLAYER_NOT_FOUND           420
-#define CODE_PLAYER_DUPLICATE           421
-#define CODE_PLAYER_INVALID_DATA        422
+// --- PETITION ---
+#define CODE_PETITION_CREATED 2201
+#define CODE_PETITION_ATTENDED 2202
+#define CODE_PETITION_CANCELLED 2203
+#define CODE_PETITION_LISTED 2204
+#define CODE_PETITION_UPDATED 2205
+#define CODE_PETITION_DELETED 2206
 
-// ----------------------------
-//  MATCH (23x)
-// ----------------------------
-#define CODE_MATCH_CREATED              230
-#define CODE_MATCH_LISTED               231
-#define CODE_MATCH_UPDATED              232
-#define CODE_MATCH_DELETED              233
-#define CODE_MATCH_NOT_FOUND            430
-#define CODE_MATCH_INVALID_DATA         431
+// --- TOURNAMENT ---
+#define CODE_TOURNAMENT_CREATED 2301
+#define CODE_TOURNAMENT_LISTED 2302
+#define CODE_TOURNAMENT_UPDATED 2303
 
-// ----------------------------
-//  PETITION (24x)
-// ----------------------------
-#define CODE_PETITION_CREATED           240
-#define CODE_PETITION_LISTED            241
-#define CODE_PETITION_ATTENDED          242
-#define CODE_PETITION_NOT_FOUND         440
-#define CODE_PETITION_INVALID_DATA      441
+// --- MATCH ---
+#define CODE_MATCH_CREATED 2401
+#define CODE_MATCH_LISTED 2402
+#define CODE_MATCH_UPDATED 2403
+#define CODE_MATCH_DELETED 2404
 
-// ----------------------------
-//  HISTORIC (25x)
-// ----------------------------
-#define CODE_HISTORIC_LISTED            250
-#define CODE_HISTORIC_DELETED           251
-#define CODE_HISTORIC_NOT_FOUND         450
-#define CODE_HISTORIC_INVALID           451
+// --- HISTORIC ---
+#define CODE_HISTORIC_CREATED 2501
+#define CODE_HISTORIC_LISTED 2502
+#define CODE_HISTORIC_DELETED 2503
 
-// ----------------------------
-//  DATABASE / INTERNAL (5xx)
-// ----------------------------
-#define CODE_DB_CONNECTION_ERROR        500
-#define CODE_DB_INIT_ERROR              501
-#define CODE_DB_QUERY_ERROR             502
-#define CODE_DB_PREPARE_ERROR           503
-#define CODE_DB_STEP_ERROR              504
-#define CODE_DB_BIND_ERROR              505
-#define CODE_EXCEPTION                  599
+// ==========================
+// ERRORS (4000 - 4999)
+// ==========================
+
+// --- GENERAL ---
+#define CODE_ERROR 4000
+#define CODE_EXCEPTION 4001
+#define CODE_ERROR_DB 4002
+#define CODE_ERROR_DB_CONNECTION 4003
+#define CODE_ERROR_DB_INIT 4003
+
+
+// --- PLAYER ---
+#define CODE_PLAYER_NOT_FOUND 4101
+#define CODE_PLAYER_ALREADY_EXISTS 4102
+#define CODE_PLAYER_INVALID_DATA 4103
+#define CODE_PLAYER_DUPLICATE 4103
+
+// --- TEAM ---
+#define CODE_TEAM_NOT_FOUND 4201
+#define CODE_TEAM_ALREADY_EXISTS 4202
+#define CODE_TEAM_FULL 4203
+#define CODE_TEAM_INVALID_DATA 4204
+#define CODE_TEAM_DUPLICATE 4204
+
+// --- PETITION ---
+#define CODE_PETITION_NOT_FOUND 4301
+#define CODE_PETITION_INVALID_TYPE 4302
+#define CODE_PETITION_ALREADY_ATTENDED 4303
+#define CODE_PETITION_INVALID_STATUS 4304
+#define CODE_PETITION_INVALID_DATA 4305
+
+// --- HISTORIC ---
+#define CODE_HISTORIC_EMPTY 4401
+#define CODE_UNDO_NOT_AVAILABLE 4402
+#define CODE_HISTORIC_JSON_ERROR 4403
+#define CODE_HISTORIC_INVALID_DATA 4404
+#define CODE_HISTORIC_NOT_FOUND 4405
+
+// --- TOURNAMENT ---
+#define CODE_TOURNAMENT_NOT_FOUND 4501
+#define CODE_TOURNAMENT_INVALID_DATA 4501
+#define CODE_TOURNAMENT_DUPLICATE 4501
+
+// --- TOURNAMENT --- 
+#define CODE_MATCH_INVALID_DATA 4601
+
+// --- MATCH ---
+#define CODE_MATCH_NOT_FOUND 4601
