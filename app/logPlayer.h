@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 #include "connection.h"
 #include "backendResponse.h"
 #include "backendQueryResponse.h"
@@ -18,7 +17,7 @@ public:
     void setLogHistoric(LogHistoric* historic);
     BackendResponse insert(int teamId, string playerName);
     BackendQueryResponse<Player> listByTeam(int teamId);
-    BackendQueryResponse<Player> getById(int playerId, Player& outputRow);
+    BackendQueryResponse<Player> getById(int playerId);
     BackendResponse update(int playerId, string newName);
     BackendResponse eliminar(int playerId);
 
