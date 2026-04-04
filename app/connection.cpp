@@ -1,36 +1,127 @@
 #include "connection.h"
 #include <iostream>
+#include <functional>
 
 using namespace std;
 
-// ------------------------------------------------------------
-//  Helpers internos
-// ------------------------------------------------------------
+// Constructores estaticos para crear parametros de cada tipo
+static SqlParam paramInt(int value) {
+    SqlParam parameter;
+    parameter.isText = false;
+    parameter.intValue = value;
+    return parameter;
+}
+
+static SqlParam paramText(string value) {
+    SqlParam parameter;
+    parameter.isText = true;
+    parameter.textValue = value;
+    return parameter;
+}
+
+static bool bindParams(sqlite3_stmt* sqlStatement, vector<SqlParam> params) {
+    for (int paramIndex = 0; paramIndex < (int)params.size(); paramIndex++) {
+        int bindIndex = paramIndex + 1; // SQLite usa indices 1-based
+        SqlParam currentParam = params[paramIndex];
+
+        if (currentParam.isText) {
+            // SQLITE_TRANSIENT hace una copia interna del string
+            int bindResult = sqlite3_bind_text(sqlStatement, bindIndex, currentParam.textValue.c_str(), -1, SQLITE_TRANSIENT);
+            if (bindResult != SQLITE_OK) {
+                return false;
+            }
+        }
+        else {
+            int bindResult = sqlite3_bind_int(sqlStatement, bindIndex, currentParam.intValue);
+            if (bindResult != SQLITE_OK) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 static bool execSimple(sqlite3* dbConnection, const char* sqlQuery) {
     char* errorMessage = nullptr;
-
     int resultCode = sqlite3_exec(dbConnection, sqlQuery, nullptr, nullptr, &errorMessage);
-
     if (errorMessage) {
         sqlite3_free(errorMessage);
     }
-
     return resultCode == SQLITE_OK;
 }
 
 static bool rowExists(sqlite3* dbConnection, string sqlQuery) {
     sqlite3_stmt* sqlStatement = nullptr;
     bool exists = false;
-
     if (sqlite3_prepare_v2(dbConnection, sqlQuery.c_str(), -1, &sqlStatement, nullptr) == SQLITE_OK) {
         if (sqlite3_step(sqlStatement) == SQLITE_ROW) {
             exists = sqlite3_column_int(sqlStatement, 0) > 0;
         }
     }
-
     sqlite3_finalize(sqlStatement);
     return exists;
+}
+
+
+// ============================================================
+//  executeNonQuery  —  helper para INSERT, UPDATE, DELETE
+//  executeQuery<T>  —  helper para SELECT
+// ============================================================
+
+int Connection::executeNonQuery(string sqlQuery, vector<SqlParam> params) {
+    sqlite3_stmt* sqlStatement = nullptr;
+
+    if (sqlite3_prepare_v2(db_, sqlQuery.c_str(), -1, &sqlStatement, nullptr) != SQLITE_OK) {
+        return SQLITE_ERROR;
+    }
+
+    if (!bindParams(sqlStatement, params)) {
+        sqlite3_finalize(sqlStatement);
+        return SQLITE_ERROR;
+    }
+
+    int resultCode = sqlite3_step(sqlStatement);
+    sqlite3_finalize(sqlStatement);
+    return resultCode;
+}
+
+template <typename T>
+DBQueryResponse<T> Connection::executeQuery(string sqlQuery, vector<SqlParam> params, function<T(sqlite3_stmt*)> rowMapper, int successCode, string callerName)
+{
+    DBQueryResponse<T> queryResult;
+    sqlite3_stmt* sqlStatement = nullptr;
+
+    if (sqlite3_prepare_v2(db_, sqlQuery.c_str(), -1, &sqlStatement, nullptr) != SQLITE_OK) {
+        DbResponse errorResponse = sqliteError(CODE_ERROR_DB, callerName + "::prepare");
+        queryResult.code = errorResponse.code;
+        queryResult.message = errorResponse.message;
+        return queryResult;
+    }
+
+    if (!bindParams(sqlStatement, params)) {
+        sqlite3_finalize(sqlStatement);
+        DbResponse errorResponse = sqliteError(CODE_ERROR_DB, callerName + "::bind");
+        queryResult.code = errorResponse.code;
+        queryResult.message = errorResponse.message;
+        return queryResult;
+    }
+
+    int lastStepResult = SQLITE_DONE;
+    while ((lastStepResult = sqlite3_step(sqlStatement)) == SQLITE_ROW) {
+        queryResult.data.push_back(rowMapper(sqlStatement));
+    }
+
+    sqlite3_finalize(sqlStatement);
+
+    if (lastStepResult != SQLITE_DONE) {
+        DbResponse errorResponse = sqliteError(CODE_ERROR_DB, callerName + "::step");
+        queryResult.code = errorResponse.code;
+        queryResult.message = errorResponse.message;
+        return queryResult;
+    }
+
+    queryResult.code = successCode;
+    return queryResult;
 }
 
 
@@ -51,13 +142,11 @@ DbResponse Connection::open(string dbPath) {
         }
 
         int resultCode = sqlite3_open(dbPath.c_str(), &db_);
-
         if (resultCode != SQLITE_OK) {
             return sqliteError(CODE_ERROR_DB_CONNECTION, "open");
         }
 
         sqlite3_exec(db_, "PRAGMA FOREIGN_KEYS = ON;", nullptr, nullptr, nullptr);
-
         opened_ = true;
         return initTables();
     }
@@ -87,11 +176,6 @@ DbResponse Connection::sqliteError(int code, string context) {
     errorMessage += db_ ? sqlite3_errmsg(db_) : "sin conexion";
     return { -1, code, errorMessage };
 }
-
-
-// ============================================================
-//  Inicializacion de tablas
-// ============================================================
 
 DbResponse Connection::initTables() {
     try {
@@ -162,26 +246,14 @@ DbResponse Connection::initTables() {
             "  NEW_DATA TEXT NOT NULL DEFAULT '{}',"
             "  STACK_POSITION INTEGER NOT NULL DEFAULT 0"
             ");"))
-
             return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_HISTORIC");
 
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_TEAM_TOURNAMENT ON TB_TEAM(TOURNAMENT_ID);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_TEAM_TOURNAMENT");
-
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PLAYER_TEAM ON TB_PLAYER(TEAM_ID);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_PLAYER_TEAM");
-
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_TOURNAMENT ON TB_MATCH(TOURNAMENT_ID, QUEUE_POSITION);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_MATCH_TOURNAMENT");
-
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_STATUS ON TB_MATCH(TOURNAMENT_ID, PHASE, STATUS);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_MATCH_STATUS");
-
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PETITION_QUEUE ON TB_PETITION(STATUS, QUEUE_POSITION);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_PETITION_QUEUE");
-
-        if (!execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_HISTORIC_STACK ON TB_HISTORIC(TOURNAMENT_ID, STACK_POSITION DESC);"))
-            return sqliteError(CODE_ERROR_DB_INIT, "initTables::IDX_HISTORIC_STACK");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_TEAM_TOURNAMENT ON TB_TEAM(TOURNAMENT_ID);");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PLAYER_TEAM ON TB_PLAYER(TEAM_ID);");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_TOURNAMENT ON TB_MATCH(TOURNAMENT_ID, QUEUE_POSITION);");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_MATCH_STATUS ON TB_MATCH(TOURNAMENT_ID, PHASE, STATUS);");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_PETITION_QUEUE ON TB_PETITION(STATUS, QUEUE_POSITION);");
+        execSimple(db_, "CREATE INDEX IF NOT EXISTS IDX_HISTORIC_STACK ON TB_HISTORIC(TOURNAMENT_ID, STACK_POSITION DESC);");
 
         return { 1, CODE_SUCCESS, "Base de datos inicializada correctamente" };
     }
@@ -201,41 +273,22 @@ DbResponse Connection::initTables() {
 
 DbResponse Connection::insertTournament(string name) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (name.empty()) {
             return { -1, CODE_TOURNAMENT_INVALID_DATA, "El nombre del torneo no puede estar vacio" };
         }
 
-        // Validacion: verificar que no exista un torneo con el mismo nombre
         string checkDuplicateQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE NAME = '" + name + "';";
         if (rowExists(db_, checkDuplicateQuery)) {
             return { -1, CODE_TOURNAMENT_DUPLICATE, "Ya existe un torneo con el nombre: " + name };
         }
 
-        // Definir la query con ? como placeholder para el valor de NAME
-        const char* sqlQuery = "INSERT INTO TB_TOURNAMENT (NAME) VALUES (?);";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "INSERT INTO TB_TOURNAMENT (NAME) VALUES (?);";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(name) });
 
-        // Compilar la query y dejarla lista para ejecutar
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertTournament::prepare");
-        }
-
-        // Reemplazar el primer ? con el valor real de name
-        sqlite3_bind_text(sqlStatement, 1, name.c_str(), -1, SQLITE_STATIC);
-
-        // Ejecutar la query
-        int resultCode = sqlite3_step(sqlStatement);
-
-        // Liberar la memoria del statement (siempre se debe llamar)
-        sqlite3_finalize(sqlStatement);
-
-        // Verificar que el INSERT se ejecuto correctamente
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertTournament::step");
+            return sqliteError(CODE_ERROR_DB, "insertTournament");
         }
 
-        // Obtener el ID que SQLite asigno automaticamente al nuevo registro
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
         return { insertedId, CODE_TOURNAMENT_CREATED, "Torneo creado exitosamente" };
     }
@@ -249,138 +302,91 @@ DbResponse Connection::insertTournament(string name) {
 }
 
 DBQueryResponse<Tournament> Connection::listTournaments() {
-    DBQueryResponse<Tournament> queryResult;
     try {
-        // Seleccionar todos los torneos ordenados por ID
-        const char* sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT ORDER BY ID;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT ORDER BY ID;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listTournaments::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
+        auto rowMapper = [](sqlite3_stmt* sqlStatement) {
             Tournament tournamentRow;
-
-            // Mapear cada columna al campo correspondiente del struct
             tournamentRow.id = sqlite3_column_int(sqlStatement, 0);
             tournamentRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
             tournamentRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+            return tournamentRow;
+            };
 
-            // Agregar el registro a la lista de salida
-            queryResult.data.push_back(tournamentRow);
+        DBQueryResponse<Tournament> queryResult = executeQuery<Tournament>(
+            sqlQuery, {}, rowMapper, CODE_TOURNAMENT_LISTED, "listTournaments"
+        );
+
+        if (queryResult.code == CODE_TOURNAMENT_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay torneos registrados"
+                : "Torneos obtenidos: " + to_string(queryResult.data.size());
         }
 
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_TOURNAMENT_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay torneos registrados";
-        }
-        else {
-            queryResult.message = "Torneos obtenidos: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listTournaments";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listTournaments" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listTournaments";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listTournaments" };
     }
 }
 
 DBQueryResponse<Tournament> Connection::obtainTournamentById(int id) {
-    DBQueryResponse<Tournament> queryResult;
     try {
-        // Buscar el torneo por su ID usando un placeholder ?
-        const char* sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "SELECT ID, NAME, PHASE FROM TB_TOURNAMENT WHERE ID = ?;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainTournamentById::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        auto rowMapper = [](sqlite3_stmt* sqlStatement) {
+            Tournament tournamentRow;
+            tournamentRow.id = sqlite3_column_int(sqlStatement, 0);
+            tournamentRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+            tournamentRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+            return tournamentRow;
+            };
+
+        DBQueryResponse<Tournament> queryResult = executeQuery<Tournament>(
+            sqlQuery, { paramInt(id) }, rowMapper, CODE_TOURNAMENT_LISTED, "obtainTournamentById"
+        );
+
+        if (queryResult.code == CODE_TOURNAMENT_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
+                queryResult.message = "Torneo con ID " + to_string(id) + " no encontrado";
+            }
+            else {
+                queryResult.message = "Torneo encontrado";
+            }
         }
 
-        // Reemplazar el ? con el ID recibido
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        // Si no retorna ninguna fila, el torneo no existe
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(id) + " no encontrado";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Tournament tournamentRow;
-        tournamentRow.id = sqlite3_column_int(sqlStatement, 0);
-        tournamentRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-        tournamentRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.data.push_back(tournamentRow);
-        queryResult.code = CODE_TOURNAMENT_LISTED;
-        queryResult.message = "Torneo encontrado";
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainTournamentById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainTournamentById" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainTournamentById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainTournamentById" };
     }
 }
 
 DbResponse Connection::updateTournamentPhase(int id, string phase) {
     try {
-        // Validacion: la fase debe ser uno de los valores permitidos por la BD
         if (phase != "Registro" && phase != "Grupos" && phase != "Eliminacion" && phase != "Finalizado") {
             return { -1, CODE_TOURNAMENT_INVALID_DATA, "Fase invalida. Use: Registro, Grupos, Eliminacion o Finalizado" };
         }
 
-        // Validacion: verificar que el torneo exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Actualizar solo el campo PHASE del torneo indicado
-        const char* sqlQuery = "UPDATE TB_TOURNAMENT SET PHASE = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateTournamentPhase::prepare");
-        }
-
-        // Enlazar parametros: primer ? = phase, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, phase.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_TOURNAMENT SET PHASE = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(phase), paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateTournamentPhase::step");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentPhase");
         }
 
         return { id, CODE_TOURNAMENT_UPDATED, "Fase del torneo actualizada a: " + phase };
@@ -396,41 +402,20 @@ DbResponse Connection::updateTournamentPhase(int id, string phase) {
 
 DbResponse Connection::updateTournamentName(int id, string newName) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (newName.empty()) {
-            return { -1, CODE_TOURNAMENT_INVALID_DATA, "El nombre no puede estar vacio" };
+            return { -1, CODE_TOURNAMENT_INVALID_DATA, "El nombre del torneo no puede estar vacio" };
         }
 
-        // Validacion: no debe existir otro torneo con el mismo nombre (excluyendo el actual)
-        string checkDuplicateQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE NAME = '" + newName + "' AND ID != " + to_string(id) + ";";
-        if (rowExists(db_, checkDuplicateQuery)) {
-            return { -1, CODE_TOURNAMENT_DUPLICATE, "Ya existe otro torneo con el nombre: " + newName };
-        }
-
-        // Validacion: verificar que el torneo a actualizar exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Actualizar solo el campo NAME del torneo indicado
-        const char* sqlQuery = "UPDATE TB_TOURNAMENT SET NAME = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateTournamentName::prepare");
-        }
-
-        // Enlazar parametros: primer ? = newName, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, newName.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_TOURNAMENT SET NAME = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(newName), paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateTournamentName::step");
+            return sqliteError(CODE_ERROR_DB, "updateTournamentName");
         }
 
         return { id, CODE_TOURNAMENT_UPDATED, "Nombre del torneo actualizado" };
@@ -446,35 +431,19 @@ DbResponse Connection::updateTournamentName(int id, string newName) {
 
 DbResponse Connection::deleteTournament(int id) {
     try {
-        // Validacion: verificar que el torneo exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Eliminar el torneo
-        const char* sqlQuery = "DELETE FROM TB_TOURNAMENT WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "DELETE FROM TB_TOURNAMENT WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(id) });
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deleteTournament::prepare");
-        }
-
-        // Enlazar parametro ID
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-
-        // Liberar memoria
-        sqlite3_finalize(sqlStatement);
-
-        // Validar ejecucion
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deleteTournament::step");
+            return sqliteError(CODE_ERROR_DB, "deleteTournament");
         }
 
-        return { id, CODE_TOURNAMENT_DELETED, "Torneo eliminado correctamente" };
+        return { id, CODE_TOURNAMENT_DELETED, "Torneo eliminado exitosamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -490,46 +459,43 @@ DbResponse Connection::deleteTournament(int id) {
 //  TB_TEAM
 // ============================================================
 
+// Mapper reutilizable para filas de Team
+static Team mapTeamRow(sqlite3_stmt* sqlStatement) {
+    Team teamRow;
+    teamRow.id = sqlite3_column_int(sqlStatement, 0);
+    teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+    teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+    teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
+    teamRow.points = sqlite3_column_int(sqlStatement, 4);
+    teamRow.wins = sqlite3_column_int(sqlStatement, 5);
+    teamRow.draws = sqlite3_column_int(sqlStatement, 6);
+    teamRow.losses = sqlite3_column_int(sqlStatement, 7);
+    return teamRow;
+}
+
 DbResponse Connection::insertTeam(string name, int tournamentId) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (name.empty()) {
             return { -1, CODE_TEAM_INVALID_DATA, "El nombre del equipo no puede estar vacio" };
         }
 
-        // Validacion: el torneo al que pertenece el equipo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
             return { -1, CODE_TOURNAMENT_NOT_FOUND, "El torneo con ID " + to_string(tournamentId) + " no existe" };
         }
 
-        // Validacion: no puede existir otro equipo con el mismo nombre en el mismo torneo
         string checkDuplicateQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE NAME = '" + name + "' AND TOURNAMENT_ID = " + to_string(tournamentId) + ";";
         if (rowExists(db_, checkDuplicateQuery)) {
             return { -1, CODE_TEAM_DUPLICATE, "Ya existe un equipo con ese nombre en el torneo" };
         }
 
-        // Insertar el equipo con su nombre y el ID del torneo
-        const char* sqlQuery = "INSERT INTO TB_TEAM (NAME, TOURNAMENT_ID) VALUES (?, ?);";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertTeam::prepare");
-        }
-
-        // Enlazar parametros: primer ? = name, segundo ? = tournamentId
-        sqlite3_bind_text(sqlStatement, 1, name.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, tournamentId);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "INSERT INTO TB_TEAM (NAME, TOURNAMENT_ID) VALUES (?, ?);";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(name), paramInt(tournamentId) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertTeam::step");
+            return sqliteError(CODE_ERROR_DB, "insertTeam");
         }
 
-        // Obtener el ID asignado automaticamente por SQLite
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
         return { insertedId, CODE_TEAM_CREATED, "Equipo generado exitosamente" };
     }
@@ -543,219 +509,111 @@ DbResponse Connection::insertTeam(string name, int tournamentId) {
 }
 
 DBQueryResponse<Team> Connection::listAllTeams() {
-    DBQueryResponse<Team> queryResult;
-
     try {
-        queryResult.data.clear();
+        string sqlQuery =
+            "SELECT ID, TOURNAMENT_ID, NAME, TOURNAMENTS, POINTS, WINS, DRAWS, LOSSES "
+            "FROM TB_TEAM ORDER BY ID;";
 
-        const char* sqlQuery = "SELECT ID, TOURNAMENT_ID, NAME, TOURNAMENTS, POINTS, WINS, DRAWS, LOSSES FROM TB_TEAM ORDER BY ID;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        DBQueryResponse<Team> queryResult = executeQuery<Team>(
+            sqlQuery, {}, mapTeamRow, CODE_TEAM_LISTED, "listAllTeams"
+        );
 
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listAllTeams::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Team teamRow;
-
-            teamRow.id = sqlite3_column_int(sqlStatement, 0);
-            teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-            teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-            teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
-            teamRow.points = sqlite3_column_int(sqlStatement, 4);
-            teamRow.wins = sqlite3_column_int(sqlStatement, 5);
-            teamRow.draws = sqlite3_column_int(sqlStatement, 6);
-            teamRow.losses = sqlite3_column_int(sqlStatement, 7);
-
-            queryResult.data.push_back(teamRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-
-        queryResult.code = CODE_TEAM_LISTED;
-
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay equipos registrados";
-        }
-        else {
-            queryResult.message = "Equipos obtenidos: " + to_string(queryResult.data.size());
+        if (queryResult.code == CODE_TEAM_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay equipos registrados"
+                : "Equipos obtenidos: " + to_string(queryResult.data.size());
         }
 
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listAllTeams";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listAllTeams" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listAllTeams";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listAllTeams" };
     }
 }
 
 DBQueryResponse<Team> Connection::listTeamsByTournament(int tournamentId) {
-    DBQueryResponse<Team> queryResult;
     try {
-        // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
+            return { {}, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
         }
 
-        // Seleccionar todos los equipos del torneo con sus estadisticas
-        const char* sqlQuery =
+        string sqlQuery =
             "SELECT ID, TOURNAMENT_ID, NAME, TOURNAMENTS, POINTS, WINS, DRAWS, LOSSES "
             "FROM TB_TEAM WHERE TOURNAMENT_ID = ? ORDER BY ID;";
-        sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listTeamsByTournament::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Team> queryResult = executeQuery<Team>(
+            sqlQuery, { paramInt(tournamentId) }, mapTeamRow, CODE_TEAM_LISTED, "listTeamsByTournament"
+        );
+
+        if (queryResult.code == CODE_TEAM_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay equipos en este torneo"
+                : "Equipos obtenidos: " + to_string(queryResult.data.size());
         }
 
-        // Reemplazar el ? con el ID del torneo
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Team teamRow;
-
-            // Mapear cada columna al campo correspondiente del struct
-            teamRow.id = sqlite3_column_int(sqlStatement, 0);
-            teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-            teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-            teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
-            teamRow.points = sqlite3_column_int(sqlStatement, 4);
-            teamRow.wins = sqlite3_column_int(sqlStatement, 5);
-            teamRow.draws = sqlite3_column_int(sqlStatement, 6);
-            teamRow.losses = sqlite3_column_int(sqlStatement, 7);
-
-            queryResult.data.push_back(teamRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_TEAM_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay equipos en este torneo";
-        }
-        else {
-            queryResult.message = "Equipos obtenidos: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listTeamsByTournament";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listTeamsByTournament" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listTeamsByTournament";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listTeamsByTournament" };
     }
 }
 
 DBQueryResponse<Team> Connection::obtainTeamById(int id) {
-    DBQueryResponse<Team> queryResult;
     try {
-        // Seleccionar el equipo por su ID con todas sus estadisticas
-        const char* sqlQuery =
+        string sqlQuery =
             "SELECT ID, TOURNAMENT_ID, NAME, TOURNAMENTS, POINTS, WINS, DRAWS, LOSSES "
             "FROM TB_TEAM WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainTeamById::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Team> queryResult = executeQuery<Team>(
+            sqlQuery, { paramInt(id) }, mapTeamRow, CODE_TEAM_LISTED, "obtainTeamById"
+        );
+
+        if (queryResult.code == CODE_TEAM_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_TEAM_NOT_FOUND;
+                queryResult.message = "Equipo con ID " + to_string(id) + " no encontrado";
+            }
+            else {
+                queryResult.message = "Equipo encontrado";
+            }
         }
 
-        // Reemplazar el ? con el ID recibido
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        // Si no retorna ninguna fila, el equipo no existe
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_TEAM_NOT_FOUND;
-            queryResult.message = "Equipo con ID " + to_string(id) + " no encontrado";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Team teamRow;
-        teamRow.id = sqlite3_column_int(sqlStatement, 0);
-        teamRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        teamRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        teamRow.tournaments = sqlite3_column_int(sqlStatement, 3);
-        teamRow.points = sqlite3_column_int(sqlStatement, 4);
-        teamRow.wins = sqlite3_column_int(sqlStatement, 5);
-        teamRow.draws = sqlite3_column_int(sqlStatement, 6);
-        teamRow.losses = sqlite3_column_int(sqlStatement, 7);
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.data.push_back(teamRow);
-        queryResult.code = CODE_TEAM_LISTED;
-        queryResult.message = "Equipo encontrado";
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainTeamById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainTeamById" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainTeamById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainTeamById" };
     }
 }
 
 DbResponse Connection::updateTeam(int id, string newName) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (newName.empty()) {
             return { -1, CODE_TEAM_INVALID_DATA, "El nombre del equipo no puede estar vacio" };
         }
 
-        // Validacion: verificar que el equipo exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Actualizar solo el campo NAME del equipo indicado
-        const char* sqlQuery = "UPDATE TB_TEAM SET NAME = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateTeam::prepare");
-        }
-
-        // Enlazar parametros: primer ? = newName, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, newName.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_TEAM SET NAME = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(newName), paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateTeam::step");
+            return sqliteError(CODE_ERROR_DB, "updateTeam");
         }
 
         return { id, CODE_TEAM_UPDATED, "Equipo actualizado exitosamente" };
@@ -771,34 +629,18 @@ DbResponse Connection::updateTeam(int id, string newName) {
 
 DbResponse Connection::updateTeamStats(int id, int points, int wins, int draws, int losses) {
     try {
-        // Validacion: verificar que el equipo exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Actualizar todas las estadisticas del equipo en una sola query
-        const char* sqlQuery =
-            "UPDATE TB_TEAM SET POINTS = ?, WINS = ?, DRAWS = ?, LOSSES = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateTeamStats::prepare");
-        }
-
-        // Enlazar cada estadistica en el orden de los ? en la query
-        sqlite3_bind_int(sqlStatement, 1, points);
-        sqlite3_bind_int(sqlStatement, 2, wins);
-        sqlite3_bind_int(sqlStatement, 3, draws);
-        sqlite3_bind_int(sqlStatement, 4, losses);
-        sqlite3_bind_int(sqlStatement, 5, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_TEAM SET POINTS = ?, WINS = ?, DRAWS = ?, LOSSES = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, {
+            paramInt(points), paramInt(wins), paramInt(draws), paramInt(losses), paramInt(id)
+            });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateTeamStats::step");
+            return sqliteError(CODE_ERROR_DB, "updateTeamStats");
         }
 
         return { id, CODE_TEAM_UPDATED, "Estadisticas del equipo actualizadas" };
@@ -814,30 +656,16 @@ DbResponse Connection::updateTeamStats(int id, int points, int wins, int draws, 
 
 DbResponse Connection::deleteTeam(int id) {
     try {
-        // Validacion: verificar que el equipo exista antes de eliminarlo
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Eliminar el equipo por su ID
-        // Por el ON DELETE CASCADE de la BD, sus jugadores se eliminan automaticamente
-        const char* sqlQuery = "DELETE FROM TB_TEAM WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deleteTeam::prepare");
-        }
-
-        // Reemplazar el ? con el ID del equipo a eliminar
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "DELETE FROM TB_TEAM WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deleteTeam::step");
+            return sqliteError(CODE_ERROR_DB, "deleteTeam");
         }
 
         return { id, CODE_TEAM_DELETED, "Equipo eliminado exitosamente" };
@@ -856,46 +684,37 @@ DbResponse Connection::deleteTeam(int id) {
 //  TB_PLAYER
 // ============================================================
 
+static Player mapPlayerRow(sqlite3_stmt* sqlStatement) {
+    Player playerRow;
+    playerRow.id = sqlite3_column_int(sqlStatement, 0);
+    playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
+    playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+    return playerRow;
+}
+
 DbResponse Connection::insertPlayer(string name, int teamId) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (name.empty()) {
             return { -1, CODE_PLAYER_INVALID_DATA, "El nombre del jugador no puede estar vacio" };
         }
 
-        // Validacion: el equipo al que pertenece el jugador debe existir
         string checkTeamQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamId) + ";";
         if (!rowExists(db_, checkTeamQuery)) {
             return { -1, CODE_TEAM_NOT_FOUND, "El equipo con ID " + to_string(teamId) + " no existe" };
         }
 
-        // Validacion: no puede existir otro jugador con el mismo nombre en el mismo equipo
         string checkDuplicateQuery = "SELECT COUNT(*) FROM TB_PLAYER WHERE NAME = '" + name + "' AND TEAM_ID = " + to_string(teamId) + ";";
         if (rowExists(db_, checkDuplicateQuery)) {
             return { -1, CODE_PLAYER_DUPLICATE, "Ya existe un jugador con ese nombre en el equipo" };
         }
 
-        // Insertar el jugador con su nombre y el ID del equipo
-        const char* sqlQuery = "INSERT INTO TB_PLAYER (NAME, TEAM_ID) VALUES (?, ?);";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertPlayer::prepare");
-        }
-
-        // Enlazar parametros: primer ? = name, segundo ? = teamId
-        sqlite3_bind_text(sqlStatement, 1, name.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, teamId);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "INSERT INTO TB_PLAYER (NAME, TEAM_ID) VALUES (?, ?);";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(name), paramInt(teamId) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertPlayer::step");
+            return sqliteError(CODE_ERROR_DB, "insertPlayer");
         }
 
-        // Obtener el ID asignado automaticamente por SQLite
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
         return { insertedId, CODE_PLAYER_CREATED, "Jugador registrado exitosamente" };
     }
@@ -909,202 +728,105 @@ DbResponse Connection::insertPlayer(string name, int teamId) {
 }
 
 DBQueryResponse<Player> Connection::listAllPlayers() {
-    DBQueryResponse<Player> queryResult;
-
     try {
-        queryResult.data.clear();
+        string sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER ORDER BY ID;";
 
-        const char* sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER ORDER BY ID;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        DBQueryResponse<Player> queryResult = executeQuery<Player>(
+            sqlQuery, {}, mapPlayerRow, CODE_PLAYER_LISTED, "listAllPlayers"
+        );
 
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listAllPlayers::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Player playerRow;
-
-            playerRow.id = sqlite3_column_int(sqlStatement, 0);
-            playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
-            playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-
-            queryResult.data.push_back(playerRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-
-        queryResult.code = CODE_PLAYER_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay jugadores registrados";
-        }
-        else {
-            queryResult.message = "Jugadores obtenidos: " + to_string(queryResult.data.size());
+        if (queryResult.code == CODE_PLAYER_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay jugadores registrados"
+                : "Jugadores obtenidos: " + to_string(queryResult.data.size());
         }
 
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listAllPlayers";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listAllPlayers" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listAllPlayers";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listAllPlayers" };
     }
 }
 
 DBQueryResponse<Player> Connection::listPlayersByTeam(int teamId) {
-    DBQueryResponse<Player> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        queryResult.data.clear();
-
-        // Validacion: el equipo debe existir
         string checkTeamQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamId) + ";";
         if (!rowExists(db_, checkTeamQuery)) {
-            queryResult.code = CODE_TEAM_NOT_FOUND;
-            queryResult.message = "Equipo con ID " + to_string(teamId) + " no encontrado";
-            return queryResult;
+            return { {}, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(teamId) + " no encontrado" };
         }
 
-        // Seleccionar todos los jugadores del equipo ordenados por ID
-        const char* sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER WHERE TEAM_ID = ? ORDER BY ID;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER WHERE TEAM_ID = ? ORDER BY ID;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listPlayersByTeam::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Player> queryResult = executeQuery<Player>(
+            sqlQuery, { paramInt(teamId) }, mapPlayerRow, CODE_PLAYER_LISTED, "listPlayersByTeam"
+        );
+
+        if (queryResult.code == CODE_PLAYER_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay jugadores en este equipo"
+                : "Jugadores obtenidos: " + to_string(queryResult.data.size());
         }
 
-        // Reemplazar el ? con el ID del equipo
-        sqlite3_bind_int(sqlStatement, 1, teamId);
-
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Player playerRow;
-
-            // Mapear cada columna al campo correspondiente del struct
-            playerRow.id = sqlite3_column_int(sqlStatement, 0);
-            playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
-            playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-
-            queryResult.data.push_back(playerRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_PLAYER_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay jugadores en este equipo";
-        }
-        else {
-            queryResult.message = "Jugadores obtenidos: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listPlayersByTeam";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listPlayersByTeam" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listPlayersByTeam";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listPlayersByTeam" };
     }
 }
 
 DBQueryResponse<Player> Connection::obtainPlayerById(int id) {
-    DBQueryResponse<Player> queryResult;
     try {
-        // Buscar el jugador por su ID
-        const char* sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery = "SELECT ID, TEAM_ID, NAME FROM TB_PLAYER WHERE ID = ?;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainPlayerById::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Player> queryResult = executeQuery<Player>(
+            sqlQuery, { paramInt(id) }, mapPlayerRow, CODE_PLAYER_LISTED, "obtainPlayerById"
+        );
+
+        if (queryResult.code == CODE_PLAYER_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_PLAYER_NOT_FOUND;
+                queryResult.message = "Jugador con ID " + to_string(id) + " no encontrado";
+            }
+            else {
+                queryResult.message = "Jugador encontrado";
+            }
         }
 
-        // Reemplazar el ? con el ID recibido
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        // Si no retorna ninguna fila, el jugador no existe
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_PLAYER_NOT_FOUND;
-            queryResult.message = "Jugador con ID " + to_string(id) + " no encontrado";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Player playerRow;
-        playerRow.id = sqlite3_column_int(sqlStatement, 0);
-        playerRow.teamId = sqlite3_column_int(sqlStatement, 1);
-        playerRow.name = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.data.push_back(playerRow);
-        queryResult.code = CODE_PLAYER_LISTED;
-        queryResult.message = "Jugador encontrado";
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainPlayerById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainPlayerById" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainPlayerById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainPlayerById" };
     }
 }
 
 DbResponse Connection::updatePlayer(int id, string name) {
     try {
-        // Validacion: el nombre no puede estar vacio
         if (name.empty()) {
             return { -1, CODE_PLAYER_INVALID_DATA, "El nombre del jugador no puede estar vacio" };
         }
 
-        // Validacion: verificar que el jugador exista
         string checkExistQuery = "SELECT COUNT(*) FROM TB_PLAYER WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_PLAYER_NOT_FOUND, "Jugador con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Actualizar solo el campo NAME del jugador indicado
-        const char* sqlQuery = "UPDATE TB_PLAYER SET NAME = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updatePlayer::prepare");
-        }
-
-        // Enlazar parametros: primer ? = name, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, name.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 2, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_PLAYER SET NAME = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(name), paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updatePlayer::step");
+            return sqliteError(CODE_ERROR_DB, "updatePlayer");
         }
 
         return { id, CODE_PLAYER_UPDATED, "Jugador actualizado exitosamente" };
@@ -1120,34 +842,28 @@ DbResponse Connection::updatePlayer(int id, string name) {
 
 DbResponse Connection::updatePlayerTeam(int playerId, int teamId) {
     try {
-        // Validacion: verificar que el jugador exista
         string checkPlayerQuery = "SELECT COUNT(*) FROM TB_PLAYER WHERE ID = " + to_string(playerId) + ";";
         if (!rowExists(db_, checkPlayerQuery)) {
             return { -1, CODE_PLAYER_NOT_FOUND, "Jugador con ID " + to_string(playerId) + " no encontrado" };
         }
 
-        const char* sqlQuery = "UPDATE TB_PLAYER SET TEAM_ID = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updatePlayerTeam::prepare");
+        string checkTeamQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamId) + ";";
+        if (!rowExists(db_, checkTeamQuery)) {
+            return { -1, CODE_TEAM_NOT_FOUND, "El equipo con ID " + to_string(teamId) + " no existe" };
         }
 
-        sqlite3_bind_int(sqlStatement, 1, teamId);
-        sqlite3_bind_int(sqlStatement, 2, playerId);
+        string sqlQuery = "UPDATE TB_PLAYER SET TEAM_ID = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(teamId), paramInt(playerId) });
 
-        if (sqlite3_step(sqlStatement) != SQLITE_DONE) {
-            sqlite3_finalize(sqlStatement);
-            return sqliteError(CODE_ERROR_DB, "updatePlayerTeam::step");
+        if (resultCode != SQLITE_DONE) {
+            return sqliteError(CODE_ERROR_DB, "updatePlayerTeam");
         }
 
-        sqlite3_finalize(sqlStatement);
-
-        return { 1, CODE_PLAYER_UPDATED, "Equipo del jugador actualizado correctamente" };
+        return { playerId, CODE_PLAYER_UPDATED, "Equipo del jugador actualizado exitosamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion en updatePlayerTeam" };
+        return { -1, CODE_EXCEPTION, "Excepcion no esperada en updatePlayerTeam" };
     }
     catch (...) {
         return { -1, CODE_EXCEPTION, "Excepcion desconocida en updatePlayerTeam" };
@@ -1156,29 +872,16 @@ DbResponse Connection::updatePlayerTeam(int playerId, int teamId) {
 
 DbResponse Connection::deletePlayer(int id) {
     try {
-        // Validacion: verificar que el jugador exista antes de eliminarlo
         string checkExistQuery = "SELECT COUNT(*) FROM TB_PLAYER WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_PLAYER_NOT_FOUND, "Jugador con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Eliminar el jugador por su ID
-        const char* sqlQuery = "DELETE FROM TB_PLAYER WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deletePlayer::prepare");
-        }
-
-        // Reemplazar el ? con el ID del jugador a eliminar
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "DELETE FROM TB_PLAYER WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deletePlayer::step");
+            return sqliteError(CODE_ERROR_DB, "deletePlayer");
         }
 
         return { id, CODE_PLAYER_DELETED, "Jugador eliminado exitosamente" };
@@ -1197,51 +900,62 @@ DbResponse Connection::deletePlayer(int id) {
 //  TB_MATCH
 // ============================================================
 
+static Match mapMatchRow(sqlite3_stmt* sqlStatement) {
+    Match matchRow;
+    matchRow.id = sqlite3_column_int(sqlStatement, 0);
+    matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
+    matchRow.teamAId = sqlite3_column_int(sqlStatement, 2);
+    matchRow.teamBId = sqlite3_column_int(sqlStatement, 3);
+    matchRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+    matchRow.round = sqlite3_column_int(sqlStatement, 5);
+    matchRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
+    matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
+
+    const unsigned char* resultText = sqlite3_column_text(sqlStatement, 8);
+    const unsigned char* playedAtText = sqlite3_column_text(sqlStatement, 9);
+    matchRow.result = resultText ? reinterpret_cast<const char*>(resultText) : "";
+    matchRow.queuePosition = sqlite3_column_int(sqlStatement, 10);
+    return matchRow;
+}
+
 DbResponse Connection::insertMatch(int tournamentId, int teamAId, int teamBId, string phase, int round, int queuePosition) {
     try {
-        // Validacion: la fase debe ser uno de los valores permitidos
         if (phase != "Grupos" && phase != "Eliminacion") {
             return { -1, CODE_MATCH_INVALID_DATA, "Fase invalida. Use: Grupos o Eliminacion" };
         }
 
-        // Validacion: un equipo no puede jugar contra si mismo
         if (teamAId == teamBId) {
             return { -1, CODE_MATCH_INVALID_DATA, "Un equipo no puede jugar contra si mismo" };
         }
 
-        // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
             return { -1, CODE_TOURNAMENT_NOT_FOUND, "El torneo con ID " + to_string(tournamentId) + " no existe" };
         }
 
-        // Insertar el partido con los datos basicos, el resultado se registra despues con updateMatchResult
-        const char* sqlQuery =
+        string checkTeamAQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamAId) + ";";
+        if (!rowExists(db_, checkTeamAQuery)) {
+            return { -1, CODE_TEAM_NOT_FOUND, "El equipo A con ID " + to_string(teamAId) + " no existe" };
+        }
+
+        string checkTeamBQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(teamBId) + ";";
+        if (!rowExists(db_, checkTeamBQuery)) {
+            return { -1, CODE_TEAM_NOT_FOUND, "El equipo B con ID " + to_string(teamBId) + " no existe" };
+        }
+
+        string sqlQuery =
             "INSERT INTO TB_MATCH (TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, QUEUE_POSITION) "
             "VALUES (?, ?, ?, ?, ?, ?);";
-        sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertMatch::prepare");
-        }
-
-        // Enlazar cada parametro en el orden de los ? en la query
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-        sqlite3_bind_int(sqlStatement, 2, teamAId);
-        sqlite3_bind_int(sqlStatement, 3, teamBId);
-        sqlite3_bind_text(sqlStatement, 4, phase.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 5, round);
-        sqlite3_bind_int(sqlStatement, 6, queuePosition);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        int resultCode = executeNonQuery(sqlQuery, {
+            paramInt(tournamentId), paramInt(teamAId), paramInt(teamBId),
+            paramText(phase), paramInt(round), paramInt(queuePosition)
+            });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertMatch::step");
+            return sqliteError(CODE_ERROR_DB, "insertMatch");
         }
 
-        // Obtener el ID asignado automaticamente por SQLite
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
         return { insertedId, CODE_MATCH_CREATED, "Partido creado exitosamente" };
     }
@@ -1255,277 +969,116 @@ DbResponse Connection::insertMatch(int tournamentId, int teamAId, int teamBId, s
 }
 
 DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
-    DBQueryResponse<Match> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        queryResult.data.clear();
-
-        // Validacion: el torneo debe existir
         string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
         if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
+            return { {}, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
         }
 
-        // IFNULL maneja columnas que pueden ser NULL (WINNER_ID, RESULT, PLAYED_AT)
-        // y los convierte a un valor por defecto para evitar errores al mapear
-        const char* sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, "
-            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION "
-            "FROM TB_MATCH WHERE TOURNAMENT_ID = ? ORDER BY QUEUE_POSITION;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery =
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "FROM TB_MATCH WHERE TOURNAMENT_ID = ? ORDER BY QUEUE_POSITION ASC;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listMatchesByTournament::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Match> queryResult = executeQuery<Match>(
+            sqlQuery, { paramInt(tournamentId) }, mapMatchRow, CODE_MATCH_LISTED, "listMatchesByTournament"
+        );
+
+        if (queryResult.code == CODE_MATCH_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay partidos en este torneo"
+                : "Partidos obtenidos: " + to_string(queryResult.data.size());
         }
 
-        // Reemplazar el ? con el ID del torneo
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Match matchRow;
-
-            // Mapear cada columna al campo correspondiente del struct
-            matchRow.id = sqlite3_column_int(sqlStatement, 0);
-            matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-            matchRow.teamAId = sqlite3_column_int(sqlStatement, 2);
-            matchRow.teamBId = sqlite3_column_int(sqlStatement, 3);
-            matchRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-            matchRow.round = sqlite3_column_int(sqlStatement, 5);
-            matchRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
-            matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
-            matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
-            matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-
-            queryResult.data.push_back(matchRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_MATCH_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay partidos en este torneo";
-        }
-        else {
-            queryResult.message = "Partidos obtenidos: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listMatchesByTournament";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listMatchesByTournament" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listMatchesByTournament";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listMatchesByTournament" };
     }
 }
 
 DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string phase) {
-    DBQueryResponse<Match> queryResult;
     try {
-        // Limpiar la lista antes de llenarla
-        queryResult.data.clear();
+        string sqlQuery =
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND PHASE = ? ORDER BY QUEUE_POSITION ASC;";
 
-        // Validacion: la fase debe ser valida
-        if (phase != "Grupos" && phase != "Eliminacion") {
-            queryResult.code = CODE_MATCH_INVALID_DATA;
-            queryResult.message = "Fase invalida. Use: Grupos o Eliminacion";
-            return queryResult;
+        DBQueryResponse<Match> queryResult = executeQuery<Match>(
+            sqlQuery, { paramInt(tournamentId), paramText(phase) }, mapMatchRow, CODE_MATCH_LISTED, "listMatchesByPhase"
+        );
+
+        if (queryResult.code == CODE_MATCH_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay partidos en la fase: " + phase
+                : "Partidos obtenidos: " + to_string(queryResult.data.size());
         }
 
-        // Validacion: el torneo debe existir
-        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
-        if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
-        }
-
-        // Filtrar partidos por torneo Y por fase especifica
-        const char* sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, "
-            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION "
-            "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND PHASE = ? ORDER BY QUEUE_POSITION;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listMatchesByPhase::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        // Enlazar parametros: primer ? = tournamentId, segundo ? = phase
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
-        sqlite3_bind_text(sqlStatement, 2, phase.c_str(), -1, SQLITE_STATIC);
-
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Match matchRow;
-            matchRow.id = sqlite3_column_int(sqlStatement, 0);
-            matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-            matchRow.teamAId = sqlite3_column_int(sqlStatement, 2);
-            matchRow.teamBId = sqlite3_column_int(sqlStatement, 3);
-            matchRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-            matchRow.round = sqlite3_column_int(sqlStatement, 5);
-            matchRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
-            matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
-            matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
-            matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-            queryResult.data.push_back(matchRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_MATCH_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay partidos en la fase: " + phase;
-        }
-        else {
-            queryResult.message = "Partidos obtenidos: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listMatchesByPhase";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listMatchesByPhase" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listMatchesByPhase";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listMatchesByPhase" };
     }
 }
 
 DBQueryResponse<Match> Connection::obtainMatchById(int id) {
-    DBQueryResponse<Match> queryResult;
-
     try {
-        const char* sqlQuery = "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, QUEUE_POSITION, PLAYED_AT FROM TB_MATCH WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery =
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "FROM TB_MATCH WHERE ID = ?;";
 
-        // Preparar query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainMatchById::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Match> queryResult = executeQuery<Match>(
+            sqlQuery, { paramInt(id) }, mapMatchRow, CODE_MATCH_LISTED, "obtainMatchById"
+        );
+
+        if (queryResult.code == CODE_MATCH_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_MATCH_NOT_FOUND;
+                queryResult.message = "Partido con ID " + to_string(id) + " no encontrado";
+            }
+            else {
+                queryResult.message = "Partido encontrado";
+            }
         }
-
-        // Bind del ID
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        // Validar si existe
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_MATCH_NOT_FOUND;
-            queryResult.message = "Partido con ID " + to_string(id) + " no encontrado";
-            return queryResult;
-        }
-
-        // Mapear resultado
-        Match matchRow;
-        matchRow.id = sqlite3_column_int(sqlStatement, 0);
-        matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
-        matchRow.teamAId = sqlite3_column_int(sqlStatement, 2);
-        matchRow.teamBId = sqlite3_column_int(sqlStatement, 3);
-        matchRow.phase = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        matchRow.round = sqlite3_column_int(sqlStatement, 5);
-        matchRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 6));
-        matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
-        matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
-        matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-
-        const unsigned char* playedAtText = sqlite3_column_text(sqlStatement, 10);
-
-        sqlite3_finalize(sqlStatement);
-
-        queryResult.data.push_back(matchRow);
-        queryResult.code = CODE_MATCH_LISTED;
-        queryResult.message = "Partido encontrado";
 
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainMatchById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainMatchById" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainMatchById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainMatchById" };
     }
 }
 
 DbResponse Connection::updateMatch(int id, string phase, int round, string status, int winnerId, string result) {
     try {
-
-        // Validaciones básicas
-        if (id <= 0) {
-            return { -1, CODE_MATCH_NOT_FOUND, "ID de partido invalido" };
-        }
-
-        if (phase.empty() || status.empty()) {
-            return { -1, CODE_MATCH_INVALID_DATA, "Phase y status no pueden estar vacios" };
-        }
-
-        if (round < 0 || winnerId < 0) {
-            return { -1, CODE_MATCH_INVALID_DATA, "Round o winnerId invalidos" };
-        }
-
-        // Validar estado permitido
-        if (status != "Pendiente" && status != "Finalizado") {
-            return { -1, CODE_MATCH_INVALID_DATA, "Estado invalido. Use: Pendiente o Finalizado" };
-        }
-
-        // Validar que el partido exista
-        string checkExistQuery =
-            "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + ";";
-
+        string checkExistQuery = "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
-            return { -1, CODE_MATCH_NOT_FOUND, "Partido no encontrado (ID: " + to_string(id) + ")" };
+            return { -1, CODE_MATCH_NOT_FOUND, "Partido con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Query de actualización
-        const char* sqlQuery =
-            "UPDATE TB_MATCH SET PHASE = ?, ROUND = ?, STATUS = ?, WINNER_ID = ?, RESULT = ? WHERE ID = ?;";
+        string sqlQuery =
+            "UPDATE TB_MATCH SET PHASE = ?, ROUND = ?, STATUS = ?, WINNER_ID = ?, RESULT = ?, "
+            "PLAYED_AT = datetime('now') WHERE ID = ?;";
 
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Preparar query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateMatch::prepare");
-        }
-
-        // Bind de parámetros
-        sqlite3_bind_text(sqlStatement, 1, phase.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(sqlStatement, 2, round);
-        sqlite3_bind_text(sqlStatement, 3, status.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(sqlStatement, 4, winnerId);
-        sqlite3_bind_text(sqlStatement, 5, result.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(sqlStatement, 6, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        int resultCode = executeNonQuery(sqlQuery, {
+            paramText(phase), paramInt(round), paramText(status),
+            paramInt(winnerId), paramText(result), paramInt(id)
+            });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateMatch::step");
+            return sqliteError(CODE_ERROR_DB, "updateMatch");
         }
 
-        return { id, CODE_MATCH_UPDATED, "Partido actualizado correctamente" };
+        return { id, CODE_MATCH_UPDATED, "Partido actualizado exitosamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -1538,29 +1091,16 @@ DbResponse Connection::updateMatch(int id, string phase, int round, string statu
 
 DbResponse Connection::deleteMatch(int id) {
     try {
-        // Validacion: verificar que el partido exista antes de eliminarlo
         string checkExistQuery = "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_MATCH_NOT_FOUND, "Partido con ID " + to_string(id) + " no encontrado" };
         }
 
-        // Eliminar el partido por su ID
-        const char* sqlQuery = "DELETE FROM TB_MATCH WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deleteMatch::prepare");
-        }
-
-        // Reemplazar el ? con el ID del partido a eliminar
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "DELETE FROM TB_MATCH WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deleteMatch::step");
+            return sqliteError(CODE_ERROR_DB, "deleteMatch");
         }
 
         return { id, CODE_MATCH_DELETED, "Partido eliminado exitosamente" };
@@ -1579,273 +1119,171 @@ DbResponse Connection::deleteMatch(int id) {
 //  TB_PETITION
 // ============================================================
 
+static Petition mapPetitionRow(sqlite3_stmt* sqlStatement) {
+    Petition petitionRow;
+    petitionRow.id = sqlite3_column_int(sqlStatement, 0);
+    petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+    petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+    petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
+    petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+    petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
+    return petitionRow;
+}
+
 DbResponse Connection::insertPetition(string requesterName, string type, string description) {
     try {
-        // Validacion: el nombre del solicitante no puede estar vacio
         if (requesterName.empty()) {
             return { -1, CODE_PETITION_INVALID_DATA, "El nombre del solicitante no puede estar vacio" };
         }
 
-        // Validacion: el tipo debe ser uno de los valores permitidos
         if (type != "Inscripcion" && type != "Consulta" && type != "Apelacion") {
             return { -1, CODE_PETITION_INVALID_DATA, "Tipo invalido. Use: Inscripcion, Consulta o Apelacion" };
         }
 
-        // Calcular el siguiente QUEUE_POSITION automaticamente
-        // IFNULL maneja el caso cuando la tabla esta vacia (MAX seria NULL)
-        string checkQueueQuery = "SELECT IFNULL(MAX(QUEUE_POSITION), 0) + 1 FROM TB_PETITION;";
-        sqlite3_stmt* sqlStatementQueue = nullptr;
+        // Calcular la siguiente posicion en la cola (FIFO: maximo actual + 1)
+        string maxPositionQuery = "SELECT COALESCE(MAX(QUEUE_POSITION), 0) + 1 FROM TB_PETITION WHERE STATUS = 'Pendiente';";
+        sqlite3_stmt* positionStatement = nullptr;
         int nextQueuePosition = 1;
 
-        if (sqlite3_prepare_v2(db_, checkQueueQuery.c_str(), -1, &sqlStatementQueue, nullptr) == SQLITE_OK) {
-            if (sqlite3_step(sqlStatementQueue) == SQLITE_ROW) {
-                nextQueuePosition = sqlite3_column_int(sqlStatementQueue, 0);
+        if (sqlite3_prepare_v2(db_, maxPositionQuery.c_str(), -1, &positionStatement, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(positionStatement) == SQLITE_ROW) {
+                nextQueuePosition = sqlite3_column_int(positionStatement, 0);
             }
         }
-        sqlite3_finalize(sqlStatementQueue);
+        sqlite3_finalize(positionStatement);
 
-        // Insertar la peticion con su posicion en la cola (FIFO)
-        const char* sqlQuery =
-            "INSERT INTO TB_PETITION (REQUESTER_NAME, TYPE, DESCRIPTION, QUEUE_POSITION) VALUES (?, ?, ?, ?);";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery =
+            "INSERT INTO TB_PETITION (REQUESTER_NAME, TYPE, DESCRIPTION, QUEUE_POSITION) "
+            "VALUES (?, ?, ?, ?);";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertPetition::prepare");
-        }
-
-        // Enlazar cada parametro en el orden de los ? en la query
-        sqlite3_bind_text(sqlStatement, 1, requesterName.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 2, type.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 3, description.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 4, nextQueuePosition);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        int resultCode = executeNonQuery(sqlQuery, {
+            paramText(requesterName), paramText(type), paramText(description), paramInt(nextQueuePosition)
+            });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertPetition::step");
+            return sqliteError(CODE_ERROR_DB, "insertPetition");
         }
 
-        // Obtener el ID asignado automaticamente por SQLite
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
-        return { insertedId, CODE_PETITION_CREATED, "Peticion encolada exitosamente" };
+        return { insertedId, CODE_PETITION_CREATED, "Peticion registrada en la cola" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
         return { -1, CODE_EXCEPTION, "Excepcion no esperada en insertPetition" };
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en insertPetition" };
+        return { -1, CODE_EXCEPTION, "Excepcion desconocida en insertPeticion" };
     }
 }
 
 DBQueryResponse<Petition> Connection::listPendingPetitions() {
-    DBQueryResponse<Petition> queryResult;
     try {
-        // Seleccionar solo las peticiones PENDIENTES en orden FIFO (menor QUEUE_POSITION primero)
-        const char* sqlQuery =
-            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION "
-            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery =
+            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
+            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION ASC;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listPendingPetitions::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Petition> queryResult = executeQuery<Petition>(
+            sqlQuery, {}, mapPetitionRow, CODE_PETITION_LISTED, "listPendingPetitions"
+        );
+
+        if (queryResult.code == CODE_PETITION_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay peticiones pendientes"
+                : "Peticiones pendientes: " + to_string(queryResult.data.size());
         }
 
-        // Iterar sobre cada fila retornada
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Petition petitionRow;
-
-            // Mapear cada columna al campo correspondiente del struct
-            petitionRow.id = sqlite3_column_int(sqlStatement, 0);
-            petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-            petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-            petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-            petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-            petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
-
-            queryResult.data.push_back(petitionRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.code = CODE_PETITION_LISTED;
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay peticiones pendientes";
-        }
-        else {
-            queryResult.message = "Peticiones pendientes: " + to_string(queryResult.data.size());
-        }
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listPendingPetitions";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listPendingPetitions" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listPendingPetitions";
-        return queryResult;
-    }
-}
-
-DBQueryResponse<Petition> Connection::obtainPetitionById(int id) {
-    DBQueryResponse<Petition> queryResult;
-    try {
-        // Buscar la peticion por su ID
-        const char* sqlQuery = "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION FROM TB_PETITION WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainPetitionById::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        // Reemplazar el ? con el ID recibido
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        // Si no retorna ninguna fila, la peticion no existe
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_PETITION_NOT_FOUND;
-            queryResult.message = "Peticion con ID " + to_string(id) + " no encontrada";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Petition petitionRow;
-        petitionRow.id = sqlite3_column_int(sqlStatement, 0);
-        petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-        petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-        petitionRow.response = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 5));
-        petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 6);
-
-        sqlite3_finalize(sqlStatement);
-
-        queryResult.data.push_back(petitionRow);
-        queryResult.code = CODE_PETITION_LISTED;
-        queryResult.message = "Peticion encontrada";
-        return queryResult;
-    }
-    catch (exception& e) {
-        cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainPetitionById";
-        return queryResult;
-    }
-    catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainPetitionById";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listPendingPetitions" };
     }
 }
 
 DBQueryResponse<Petition> Connection::obtainNextPetition() {
-    DBQueryResponse<Petition> queryResult;
     try {
-        // Obtener la peticion pendiente con menor QUEUE_POSITION (frente de la cola FIFO)
-        const char* sqlQuery =
-            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, RESPONSE, STATUS, QUEUE_POSITION "
-            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION LIMIT 1;";
-        sqlite3_stmt* sqlStatement = nullptr;
+        string sqlQuery =
+            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
+            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION ASC LIMIT 1;";
 
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainNextPetition::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
+        DBQueryResponse<Petition> queryResult = executeQuery<Petition>(
+            sqlQuery, {}, mapPetitionRow, CODE_PETITION_LISTED, "obtainNextPetition"
+        );
+
+        if (queryResult.code == CODE_PETITION_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_PETITION_NOT_FOUND;
+                queryResult.message = "No hay peticiones pendientes en la cola";
+            }
+            else {
+                queryResult.message = "Siguiente peticion obtenida";
+            }
         }
 
-        // Si no retorna ninguna fila, no hay peticiones pendientes
-        if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatement);
-            queryResult.code = CODE_PETITION_NOT_FOUND;
-            queryResult.message = "No hay peticiones pendientes";
-            return queryResult;
-        }
-
-        // Mapear las columnas al struct de salida
-        Petition petitionRow;
-        petitionRow.id = sqlite3_column_int(sqlStatement, 0);
-        petitionRow.requesterName = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-        petitionRow.type = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-        petitionRow.description = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 3));
-        petitionRow.status = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-        petitionRow.queuePosition = sqlite3_column_int(sqlStatement, 5);
-
-        sqlite3_finalize(sqlStatement);
-        queryResult.data.push_back(petitionRow);
-        queryResult.code = CODE_PETITION_LISTED;
-        queryResult.message = "Siguiente peticion obtenida";
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainNextPetition";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainNextPetition" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainNextPetition";
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainNextPetition" };
+    }
+}
+
+DBQueryResponse<Petition> Connection::obtainPetitionById(int id) {
+    try {
+        string sqlQuery =
+            "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
+            "FROM TB_PETITION WHERE ID = ?;";
+
+        DBQueryResponse<Petition> queryResult = executeQuery<Petition>(
+            sqlQuery, { paramInt(id) }, mapPetitionRow, CODE_PETITION_LISTED, "obtainPetitionById"
+        );
+
+        if (queryResult.code == CODE_PETITION_LISTED) {
+            if (queryResult.data.empty()) {
+                queryResult.code = CODE_PETITION_NOT_FOUND;
+                queryResult.message = "Peticion con ID " + to_string(id) + " no encontrada";
+            }
+            else {
+                queryResult.message = "Peticion encontrada";
+            }
+        }
+
         return queryResult;
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en obtainPetitionById" };
+    }
+    catch (...) {
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en obtainPetitionById" };
     }
 }
 
 DbResponse Connection::updatePetitionStatus(int id, string response, string status) {
     try {
-        // Validacion: el nombre del solicitante no puede estar vacio
-        if (response.empty()) {
-            return { -1, CODE_PETITION_INVALID_DATA, "La respuesta no puede estar vacio" };
+        if (status != "Pendiente" && status != "Atendida" && status != "Cancelada") {
+            return { -1, CODE_PETITION_INVALID_DATA, "Estado invalido. Use: Pendiente, Atendida o Cancelada" };
         }
 
-        // Validacion: el nuevo estado debe ser Atendida o Cancelada
-        if (status != "Atendida" && status != "Cancelada") {
-            return { -1, CODE_PETITION_INVALID_DATA, "Estado invalido. Use: Atendida o Cancelada" };
+        string checkExistQuery = "SELECT COUNT(*) FROM TB_PETITION WHERE ID = " + to_string(id) + ";";
+        if (!rowExists(db_, checkExistQuery)) {
+            return { -1, CODE_PETITION_NOT_FOUND, "Peticion con ID " + to_string(id) + " no encontrada" };
         }
 
-        // Validacion: la peticion debe existir y estar en estado Pendiente
-        // No se puede cambiar el estado de una peticion ya procesada
-        string checkPendingQuery =
-            "SELECT COUNT(*) FROM TB_PETITION WHERE ID = " + to_string(id) + " AND STATUS = 'Pendiente';";
-        if (!rowExists(db_, checkPendingQuery)) {
-            return { -1, CODE_PETITION_NOT_FOUND, "Peticion no encontrada o ya procesada (ID: " + to_string(id) + ")" };
-        }
-
-        // Actualizar el estado de la peticion
-        const char* sqlQuery = "UPDATE TB_PETITION SET RESPONSE = ?, STATUS = ? WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updatePetitionStatus::prepare");
-        }
-
-        // Enlazar parametros: primer ? = status, segundo ? = id
-        sqlite3_bind_text(sqlStatement, 1, response.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(sqlStatement, 2, status.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(sqlStatement, 3, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "UPDATE TB_PETITION SET RESPONSE = ?, STATUS = ? WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramText(response), paramText(status), paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updatePetitionStatus::step");
+            return sqliteError(CODE_ERROR_DB, "updatePetitionStatus");
         }
 
-        return { id, CODE_PETITION_ATTENDED, "Peticion actualizada a: " + status };
+        return { id, CODE_PETITION_ATTENDED, "Peticion actualizada exitosamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
@@ -1858,29 +1296,16 @@ DbResponse Connection::updatePetitionStatus(int id, string response, string stat
 
 DbResponse Connection::deletePetition(int id) {
     try {
-        // Validacion: verificar que la peticion exista antes de eliminarla
         string checkExistQuery = "SELECT COUNT(*) FROM TB_PETITION WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {
             return { -1, CODE_PETITION_NOT_FOUND, "Peticion con ID " + to_string(id) + " no encontrada" };
         }
 
-        // Eliminar la peticion por su ID
-        const char* sqlQuery = "DELETE FROM TB_PETITION WHERE ID = ?;";
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        // Compilar la query
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deletePetition::prepare");
-        }
-
-        // Reemplazar el ? con el ID de la peticion a eliminar
-        sqlite3_bind_int(sqlStatement, 1, id);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        string sqlQuery = "DELETE FROM TB_PETITION WHERE ID = ?;";
+        int resultCode = executeNonQuery(sqlQuery, { paramInt(id) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deletePetition::step");
+            return sqliteError(CODE_ERROR_DB, "deletePetition");
         }
 
         return { id, CODE_PETITION_DELETED, "Peticion eliminada exitosamente" };
@@ -1899,10 +1324,20 @@ DbResponse Connection::deletePetition(int id) {
 //  TB_HISTORIC
 // ============================================================
 
-DbResponse Connection::insertHistoric(string actionType, string entityType, int recordId, string previousData, string newData, int stackPosition)
-{
+static Historic mapHistoricRow(sqlite3_stmt* sqlStatement) {
+    Historic historicRow;
+    historicRow.id = sqlite3_column_int(sqlStatement, 0);
+    historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
+    historicRow.entityType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
+    historicRow.recordId = sqlite3_column_int(sqlStatement, 3);
+    historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
+    historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 5));
+    historicRow.stackPosition = sqlite3_column_int(sqlStatement, 6);
+    return historicRow;
+}
+
+DbResponse Connection::insertHistoric(string actionType, string entityType, int recordId, string previousData, string newData, int stackPosition) {
     try {
-        // Validaciones básicas
         if (actionType.empty()) {
             return { -1, CODE_HISTORIC_INVALID_DATA, "El tipo de accion no puede estar vacio" };
         }
@@ -1915,29 +1350,17 @@ DbResponse Connection::insertHistoric(string actionType, string entityType, int 
             return { -1, CODE_HISTORIC_INVALID_DATA, "Los datos previos son necesarios para permitir deshacer" };
         }
 
-        const char* sqlQuery =
-            "INSERT INTO TB_HISTORIC "
-            "(ACTION_TYPE, ENTITY_TYPE, RECORD_ID, PREVIOUS_DATA, NEW_DATA, STACK_POSITION) "
+        string sqlQuery =
+            "INSERT INTO TB_HISTORIC (ACTION_TYPE, ENTITY_TYPE, RECORD_ID, PREVIOUS_DATA, NEW_DATA, STACK_POSITION) "
             "VALUES (?, ?, ?, ?, ?, ?);";
 
-        sqlite3_stmt* sqlStatement = nullptr;
-
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "insertHistoric::prepare");
-        }
-
-        sqlite3_bind_text(sqlStatement, 1, actionType.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 2, entityType.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 3, recordId);
-        sqlite3_bind_text(sqlStatement, 4, previousData.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(sqlStatement, 5, newData.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 6, stackPosition);
-
-        int resultCode = sqlite3_step(sqlStatement);
-        sqlite3_finalize(sqlStatement);
+        int resultCode = executeNonQuery(sqlQuery, {
+            paramText(actionType), paramText(entityType), paramInt(recordId),
+            paramText(previousData), paramText(newData), paramInt(stackPosition)
+            });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "insertHistoric::step");
+            return sqliteError(CODE_ERROR_DB, "insertHistoric");
         }
 
         int insertedId = static_cast<int>(sqlite3_last_insert_rowid(db_));
@@ -1953,99 +1376,55 @@ DbResponse Connection::insertHistoric(string actionType, string entityType, int 
 }
 
 DBQueryResponse<Historic> Connection::listHistoric() {
-    DBQueryResponse<Historic> queryResult;
-
     try {
-        queryResult.data.clear();
-
-        const char* sqlQuery =
+        string sqlQuery =
             "SELECT ID, ACTION_TYPE, ENTITY_TYPE, RECORD_ID, PREVIOUS_DATA, NEW_DATA, STACK_POSITION "
-            "FROM TB_HISTORIC "
-            "ORDER BY STACK_POSITION ASC;";
+            "FROM TB_HISTORIC ORDER BY STACK_POSITION ASC;";
 
-        sqlite3_stmt* sqlStatement = nullptr;
+        DBQueryResponse<Historic> queryResult = executeQuery<Historic>(
+            sqlQuery, {}, mapHistoricRow, CODE_HISTORIC_LISTED, "listHistoric"
+        );
 
-        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "listHistoric::prepare");
-            queryResult.code = errorResponse.code;
-            queryResult.message = errorResponse.message;
-            return queryResult;
-        }
-
-        while (sqlite3_step(sqlStatement) == SQLITE_ROW) {
-            Historic historicRow;
-
-            historicRow.id = sqlite3_column_int(sqlStatement, 0);
-            historicRow.actionType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 1));
-            historicRow.entityType = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 2));
-            historicRow.recordId = sqlite3_column_int(sqlStatement, 3);
-            historicRow.previousData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 4));
-            historicRow.newData = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 5));
-            historicRow.stackPosition = sqlite3_column_int(sqlStatement, 6);
-
-            queryResult.data.push_back(historicRow);
-        }
-
-        sqlite3_finalize(sqlStatement);
-
-        queryResult.code = CODE_HISTORIC_LISTED;
-
-        if (queryResult.data.empty()) {
-            queryResult.message = "No hay acciones en el historial";
-        }
-        else {
-            queryResult.message = "Historial obtenido: " + to_string(queryResult.data.size()) + " entradas";
+        if (queryResult.code == CODE_HISTORIC_LISTED) {
+            queryResult.message = queryResult.data.empty()
+                ? "No hay acciones en el historial"
+                : "Historial obtenido: " + to_string(queryResult.data.size()) + " entradas";
         }
 
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en listHistoric";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion no esperada en listHistoric" };
     }
     catch (...) {
-        queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en listHistoric";
-        return queryResult;
+        return { {}, CODE_EXCEPTION, "Excepcion desconocida en listHistoric" };
     }
 }
 
 DbResponse Connection::deleteLastHistoric() {
     try {
-        const char* sqlQuerySelect =
-            "SELECT ID FROM TB_HISTORIC "
-            "ORDER BY STACK_POSITION DESC LIMIT 1;";
+        string selectQuery = "SELECT ID FROM TB_HISTORIC ORDER BY STACK_POSITION DESC LIMIT 1;";
 
-        sqlite3_stmt* sqlStatementSelect = nullptr;
+        sqlite3_stmt* selectStatement = nullptr;
 
-        if (sqlite3_prepare_v2(db_, sqlQuerySelect, -1, &sqlStatementSelect, nullptr) != SQLITE_OK) {
+        if (sqlite3_prepare_v2(db_, selectQuery.c_str(), -1, &selectStatement, nullptr) != SQLITE_OK) {
             return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::select::prepare");
         }
 
-        if (sqlite3_step(sqlStatementSelect) != SQLITE_ROW) {
-            sqlite3_finalize(sqlStatementSelect);
+        if (sqlite3_step(selectStatement) != SQLITE_ROW) {
+            sqlite3_finalize(selectStatement);
             return { -1, CODE_HISTORIC_NOT_FOUND, "No hay acciones para deshacer" };
         }
 
-        int lastHistoricId = sqlite3_column_int(sqlStatementSelect, 0);
-        sqlite3_finalize(sqlStatementSelect);
+        int lastHistoricId = sqlite3_column_int(selectStatement, 0);
+        sqlite3_finalize(selectStatement);
 
-        const char* sqlQueryDelete = "DELETE FROM TB_HISTORIC WHERE ID = ?;";
-        sqlite3_stmt* sqlStatementDelete = nullptr;
-
-        if (sqlite3_prepare_v2(db_, sqlQueryDelete, -1, &sqlStatementDelete, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::delete::prepare");
-        }
-
-        sqlite3_bind_int(sqlStatementDelete, 1, lastHistoricId);
-
-        int resultCode = sqlite3_step(sqlStatementDelete);
-        sqlite3_finalize(sqlStatementDelete);
+        string deleteQuery = "DELETE FROM TB_HISTORIC WHERE ID = ?;";
+        int resultCode = executeNonQuery(deleteQuery, { paramInt(lastHistoricId) });
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::delete::step");
+            return sqliteError(CODE_ERROR_DB, "deleteLastHistoric::delete");
         }
 
         return { lastHistoricId, CODE_HISTORIC_DELETED, "Ultima accion eliminada del historial" };

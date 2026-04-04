@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 #include "sqlite3.h"
 #include "codes.h"
 #include "dbResponse.h"
@@ -14,6 +15,17 @@
 #include "historics.h"
 
 using namespace std;
+
+// Representa un parametro que puede ser int o texto para los helpers
+struct SqlParam {
+    bool   isText = false;
+    int    intValue = 0;
+    string textValue;
+};
+
+// Constructores de SqlParam
+SqlParam paramInt(int value);
+SqlParam paramText(string value);
 
 class Connection {
 public:
@@ -91,4 +103,21 @@ private:
 
     DbResponse initTables();
     DbResponse sqliteError(int code, string context);
+
+    // ===================
+    //  Helpers internos
+    // ===================
+
+    // Ejecuta INSERT, UPDATE o DELETE y retorna el codigo de resultado SQLite
+    int executeNonQuery(string sqlQuery, vector<SqlParam> params);
+
+    // Ejecuta un SELECT, mapea cada fila con rowMapper y retorna los resultados
+    template <typename T>
+    DBQueryResponse<T> executeQuery(
+        string sqlQuery,
+        vector<SqlParam> params,
+        function<T(sqlite3_stmt*)> rowMapper,
+        int successCode,
+        string callerName
+    );
 };
