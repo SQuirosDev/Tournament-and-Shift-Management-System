@@ -136,7 +136,6 @@ DbResponse Connection::initTables() {
             "  WINNER_ID INTEGER REFERENCES TB_TEAM(ID),"
             "  RESULT TEXT CHECK(RESULT IN ('Gana A', 'Gana B', 'Empate', NULL)),"
             "  QUEUE_POSITION INTEGER NOT NULL DEFAULT 0,"
-            "  PLAYED_AT TEXT,"
             "  CHECK(TEAM_A_ID != TEAM_B_ID)"
             ");"))
             return sqliteError(CODE_ERROR_DB_INIT, "initTables::TB_MATCH");
@@ -1273,7 +1272,7 @@ DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
         // y los convierte a un valor por defecto para evitar errores al mapear
         const char* sqlQuery =
             "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, "
-            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION, IFNULL(PLAYED_AT, '') "
+            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION "
             "FROM TB_MATCH WHERE TOURNAMENT_ID = ? ORDER BY QUEUE_POSITION;";
         sqlite3_stmt* sqlStatement = nullptr;
 
@@ -1303,7 +1302,6 @@ DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
             matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
             matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
             matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-            matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
 
             queryResult.data.push_back(matchRow);
         }
@@ -1355,7 +1353,7 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
         // Filtrar partidos por torneo Y por fase especifica
         const char* sqlQuery =
             "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, "
-            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION, IFNULL(PLAYED_AT, '') "
+            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION "
             "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND PHASE = ? ORDER BY QUEUE_POSITION;";
         sqlite3_stmt* sqlStatement = nullptr;
 
@@ -1384,7 +1382,6 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
             matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
             matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
             matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-            matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
             queryResult.data.push_back(matchRow);
         }
 
@@ -1411,45 +1408,33 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
     }
 }
 
-DBQueryResponse<Match> Connection::obtainNextMatch(int tournamentId) {
+DBQueryResponse<Match> Connection::obtainMatchById(int id) {
     DBQueryResponse<Match> queryResult;
-    try {
-        // Validacion: el torneo debe existir
-        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
-        if (!rowExists(db_, checkTournamentQuery)) {
-            queryResult.code = CODE_TOURNAMENT_NOT_FOUND;
-            queryResult.message = "Torneo con ID " + to_string(tournamentId) + " no encontrado";
-            return queryResult;
-        }
 
-        // Obtener el partido pendiente con menor QUEUE_POSITION (frente de la cola)
-        const char* sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, "
-            "IFNULL(WINNER_ID, 0), IFNULL(RESULT, ''), QUEUE_POSITION, IFNULL(PLAYED_AT, '') "
-            "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND STATUS = 'Pendiente' "
-            "ORDER BY QUEUE_POSITION LIMIT 1;";
+    try {
+        const char* sqlQuery = "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, QUEUE_POSITION, PLAYED_AT FROM TB_MATCH WHERE ID = ?;";
         sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
+        // Preparar query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainNextMatch::prepare");
+            DbResponse errorResponse = sqliteError(CODE_ERROR_DB, "obtainMatchById::prepare");
             queryResult.code = errorResponse.code;
             queryResult.message = errorResponse.message;
             return queryResult;
         }
 
-        // Reemplazar el ? con el ID del torneo
-        sqlite3_bind_int(sqlStatement, 1, tournamentId);
+        // Bind del ID
+        sqlite3_bind_int(sqlStatement, 1, id);
 
-        // Si no retorna ninguna fila, no hay partidos pendientes
+        // Validar si existe
         if (sqlite3_step(sqlStatement) != SQLITE_ROW) {
             sqlite3_finalize(sqlStatement);
             queryResult.code = CODE_MATCH_NOT_FOUND;
-            queryResult.message = "No hay partidos pendientes en el torneo";
+            queryResult.message = "Partido con ID " + to_string(id) + " no encontrado";
             return queryResult;
         }
 
-        // Mapear las columnas al struct de salida
+        // Mapear resultado
         Match matchRow;
         matchRow.id = sqlite3_column_int(sqlStatement, 0);
         matchRow.tournamentId = sqlite3_column_int(sqlStatement, 1);
@@ -1461,78 +1446,93 @@ DBQueryResponse<Match> Connection::obtainNextMatch(int tournamentId) {
         matchRow.winnerId = sqlite3_column_int(sqlStatement, 7);
         matchRow.result = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 8));
         matchRow.queuePosition = sqlite3_column_int(sqlStatement, 9);
-        matchRow.playedAt = reinterpret_cast<const char*>(sqlite3_column_text(sqlStatement, 10));
+
+        const unsigned char* playedAtText = sqlite3_column_text(sqlStatement, 10);
 
         sqlite3_finalize(sqlStatement);
+
         queryResult.data.push_back(matchRow);
         queryResult.code = CODE_MATCH_LISTED;
-        queryResult.message = "Siguiente partido obtenido";
+        queryResult.message = "Partido encontrado";
+
         return queryResult;
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
         queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion no esperada en obtainNextMatch";
+        queryResult.message = "Excepcion no esperada en obtainMatchById";
         return queryResult;
     }
     catch (...) {
         queryResult.code = CODE_EXCEPTION;
-        queryResult.message = "Excepcion desconocida en obtainNextMatch";
+        queryResult.message = "Excepcion desconocida en obtainMatchById";
         return queryResult;
     }
 }
 
-DbResponse Connection::updateMatchResult(int id, string result, int winnerId, int round) {
+DbResponse Connection::updateMatch(int id, string phase, int round, string status, int winnerId, string result) {
     try {
-        // Validacion: el resultado debe ser uno de los valores permitidos
-        if (result != "Gana A" && result != "Gana B" && result != "Empate") {
-            return { -1, CODE_MATCH_INVALID_DATA, "Resultado invalido. Use: Gana A, Gana B o Empate" };
+
+        // Validaciones básicas
+        if (id <= 0) {
+            return { -1, CODE_MATCH_NOT_FOUND, "ID de partido invalido" };
         }
 
-        // Validacion: verificar que el partido exista
-        string checkExistQuery = "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + ";";
+        if (phase.empty() || status.empty()) {
+            return { -1, CODE_MATCH_INVALID_DATA, "Phase y status no pueden estar vacios" };
+        }
+
+        if (round < 0 || winnerId < 0) {
+            return { -1, CODE_MATCH_INVALID_DATA, "Round o winnerId invalidos" };
+        }
+
+        // Validar estado permitido
+        if (status != "Pendiente" && status != "Finalizado") {
+            return { -1, CODE_MATCH_INVALID_DATA, "Estado invalido. Use: Pendiente o Finalizado" };
+        }
+
+        // Validar que el partido exista
+        string checkExistQuery =
+            "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + ";";
+
         if (!rowExists(db_, checkExistQuery)) {
-            return { -1, CODE_MATCH_NOT_FOUND, "Partido con ID " + to_string(id) + " no encontrado" };
+            return { -1, CODE_MATCH_NOT_FOUND, "Partido no encontrado (ID: " + to_string(id) + ")" };
         }
 
-        // Validacion: el partido debe estar pendiente, no se puede modificar uno ya finalizado
-        string checkPendingQuery = "SELECT COUNT(*) FROM TB_MATCH WHERE ID = " + to_string(id) + " AND STATUS = 'Pendiente';";
-        if (!rowExists(db_, checkPendingQuery)) {
-            return { -1, CODE_MATCH_INVALID_DATA, "El partido ya fue finalizado" };
-        }
-
-        // Actualizar resultado, ganador, ronda, cambiar estado a Finalizado y registrar fecha/hora automaticamente
+        // Query de actualización
         const char* sqlQuery =
-            "UPDATE TB_MATCH SET ROUND = ?, RESULT = ?, WINNER_ID = ?, STATUS = 'Finalizado', PLAYED_AT = datetime('now') "
-            "WHERE ID = ?;";
+            "UPDATE TB_MATCH SET PHASE = ?, ROUND = ?, STATUS = ?, WINNER_ID = ?, RESULT = ? WHERE ID = ?;";
+
         sqlite3_stmt* sqlStatement = nullptr;
 
-        // Compilar la query
+        // Preparar query
         if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
-            return sqliteError(CODE_ERROR_DB, "updateMatchResult::prepare");
+            return sqliteError(CODE_ERROR_DB, "updateMatch::prepare");
         }
 
-        // Enlazar parametros en el orden de los ? en la query
-        sqlite3_bind_int(sqlStatement, 1, round);
-        sqlite3_bind_text(sqlStatement, 2, result.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(sqlStatement, 3, winnerId);
-        sqlite3_bind_int(sqlStatement, 4, id);
+        // Bind de parámetros
+        sqlite3_bind_text(sqlStatement, 1, phase.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(sqlStatement, 2, round);
+        sqlite3_bind_text(sqlStatement, 3, status.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(sqlStatement, 4, winnerId);
+        sqlite3_bind_text(sqlStatement, 5, result.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(sqlStatement, 6, id);
 
         int resultCode = sqlite3_step(sqlStatement);
         sqlite3_finalize(sqlStatement);
 
         if (resultCode != SQLITE_DONE) {
-            return sqliteError(CODE_ERROR_DB, "updateMatchResult::step");
+            return sqliteError(CODE_ERROR_DB, "updateMatch::step");
         }
 
-        return { id, CODE_MATCH_UPDATED, "Resultado del partido registrado exitosamente" };
+        return { id, CODE_MATCH_UPDATED, "Partido actualizado correctamente" };
     }
     catch (exception& e) {
         cout << "DB Exception: " << string(e.what());
-        return { -1, CODE_EXCEPTION, "Excepcion no esperada en updateMatchResult" };
+        return { -1, CODE_EXCEPTION, "Excepcion no esperada en updateMatch" };
     }
     catch (...) {
-        return { -1, CODE_EXCEPTION, "Excepcion desconocida en updateMatchResult" };
+        return { -1, CODE_EXCEPTION, "Excepcion desconocida en updateMatch" };
     }
 }
 

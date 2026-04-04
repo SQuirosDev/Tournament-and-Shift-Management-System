@@ -8,12 +8,14 @@
 #include "logPetition.h"
 #include "logTeam.h"
 #include "logTournament.h"
+#include "logMatch.h"
 
 LogHistoric::LogHistoric(Connection& dbConnection) : connection(dbConnection) {
     logPlayer = nullptr;
     logPetition = nullptr;
     logTeam = nullptr;
     logTournament = nullptr;
+    logMatch = nullptr;
 }
 
 void LogHistoric::setLogPlayer(LogPlayer* player) {
@@ -30,6 +32,10 @@ void LogHistoric::setLogTeam(LogTeam* team) {
 
 void LogHistoric::setLogTournament(LogTournament* tournament) {
     logTournament = tournament;
+}
+
+void LogHistoric::setLogMatch(LogMatch* match) {
+    logMatch = match;
 }
 
 BackendResponse LogHistoric::insert(Historic h) {
@@ -68,6 +74,9 @@ BackendResponse LogHistoric::undo() {
         undoResponse = undoTeam(last);
     }
     else if (last.entityType == "Tournament") {
+        undoResponse = undoTournament(last);
+    }
+    else if (last.entityType == "Match") {
         undoResponse = undoTournament(last);
     }
     else {
@@ -179,8 +188,38 @@ BackendResponse LogHistoric::undoTournament(Historic& h) {
     }
     else if (h.actionType == "Delete") {
         string name = prev.value("name", "");
-        string id = prev.value("id", "");
         return logTournament->insert(name);
+    }
+
+    return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };
+}
+
+BackendResponse LogHistoric::undoMatch(Historic& h) {
+    json prev;
+
+    try {
+        prev = json::parse(h.previousData);
+    }
+    catch (...) {
+        return { -1, CODE_HISTORIC_JSON_ERROR, "Error parseando JSON en previousData" };
+    }
+
+    if (h.actionType == "Insert") {
+        return logMatch->eliminar(h.recordId);
+    }
+    else if (h.actionType == "Update") {
+        string phase = prev.value("phase", "");
+        string round = prev.value("round", "");
+        string status = prev.value("status", "");
+        string winnerId = prev.value("winnerId", "");
+        string result = prev.value("result", "");
+        return logMatch->update(h.recordId, phase, stoi(round), status, stoi(winnerId), result);
+    }
+    else if (h.actionType == "Delete") {
+        string tournamentId = prev.value("tournamentId", "");
+        string teamAId = prev.value("teamAId", "");
+        string teamBId = prev.value("teamBId", "");
+        return logMatch->insert(stoi(tournamentId), stoi(teamAId), stoi(teamBId));
     }
 
     return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };

@@ -15,5 +15,4 @@ struct Match {
     int winnerId = 0;
     string result;        // "Gana A" | "Gana B" | "Empate"
     int queuePosition = 0;
-    string playedAt;
 };

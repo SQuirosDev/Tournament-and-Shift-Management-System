@@ -14,6 +14,7 @@ class LogPlayer;
 class LogPetition;
 class LogTeam;
 class LogTournament;
+class LogMatch;
 
 class LogHistoric {
 private:
@@ -22,6 +23,7 @@ private:
     LogPetition* logPetition;
     LogTeam* logTeam;
     LogTournament* logTournament;
+    LogMatch* logMatch;
 
 public:
     LogHistoric(Connection& dbConnection);
@@ -30,6 +32,7 @@ public:
     void setLogPetition(LogPetition* petition);
     void setLogTeam(LogTeam* team);
     void setLogTournament(LogTournament* tournament);
+    void setLogMatch(LogMatch* match);
     BackendResponse insert(Historic h);
     BackendResponse undo();
 
@@ -38,4 +41,5 @@ private:
     BackendResponse undoPetition(Historic& h);
     BackendResponse undoTeam(Historic& h);
     BackendResponse undoTournament(Historic& h);
+    BackendResponse undoMatch(Historic& h);
 };

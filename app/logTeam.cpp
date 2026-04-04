@@ -32,7 +32,6 @@ BackendResponse LogTeam::insert(string name, int tournamentId) {
 
     string newData = "{ \"id\": " + to_string(response.id) + ", \"tournamentId\": " + to_string(0) + ", \"name\": \"" + name + "\", \"tournaments\": " + to_string(0) + ", \"points\": " + to_string(0) + ", \"wins\": " + to_string(0) + ", \"draws\": " + to_string(0) + ", \"losses\": " + to_string(0) + " }";
 
-    // Historial
     logHistoric->insert(historicFactory("Insert", "Team", response.id, "{}", newData));
 
     return response;

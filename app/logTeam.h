@@ -3,6 +3,7 @@
 #include "connection.h"
 #include "backendResponse.h"
 #include "backendQueryResponse.h"
+#include "teams.h"
 
 using namespace std;
 

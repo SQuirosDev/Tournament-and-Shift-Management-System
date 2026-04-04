@@ -63,8 +63,8 @@ public:
     DbResponse insertMatch(int tournamentId, int teamAId, int teamBId, string phase, int round, int queuePosition);
     DBQueryResponse<Match> listMatchesByTournament(int tournamentId);
     DBQueryResponse<Match> listMatchesByPhase(int tournamentId, string phase);
-    DBQueryResponse<Match> obtainNextMatch(int tournamentId);
-    DbResponse updateMatchResult(int id, string result, int winnerId, int round);
+    DBQueryResponse<Match> obtainMatchById(int id);
+    DbResponse updateMatch(int id, string phase, int round, string status, int winnerId, string result);
     DbResponse deleteMatch(int id);
 
     // ============================================================
