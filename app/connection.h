@@ -33,6 +33,7 @@ public:
     DBQueryResponse<Tournament> obtainTournamentById(int id);
     DbResponse updateTournamentPhase(int id, string phase);
     DbResponse updateTournamentName(int id, string newName);
+    DbResponse deleteTournament(int id);
 
     // ============================================================
     //  TB_TEAM

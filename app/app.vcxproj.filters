@@ -103,6 +103,9 @@
     <ClCompile Include="logTeam.cpp">
       <Filter>Source Files\logics</Filter>
     </ClCompile>
+    <ClCompile Include="logTournament.cpp">
+      <Filter>Source Files\logics</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">

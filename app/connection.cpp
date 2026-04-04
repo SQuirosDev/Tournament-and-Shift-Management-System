@@ -445,6 +445,47 @@ DbResponse Connection::updateTournamentName(int id, string newName) {
     }
 }
 
+DbResponse Connection::deleteTournament(int id) {
+    try {
+        // Validacion: verificar que el torneo exista
+        string checkExistQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(id) + ";";
+        if (!rowExists(db_, checkExistQuery)) {
+            return { -1, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(id) + " no encontrado" };
+        }
+
+        // Eliminar el torneo
+        const char* sqlQuery = "DELETE FROM TB_TOURNAMENT WHERE ID = ?;";
+        sqlite3_stmt* sqlStatement = nullptr;
+
+        // Compilar la query
+        if (sqlite3_prepare_v2(db_, sqlQuery, -1, &sqlStatement, nullptr) != SQLITE_OK) {
+            return sqliteError(CODE_ERROR_DB, "deleteTournament::prepare");
+        }
+
+        // Enlazar parametro ID
+        sqlite3_bind_int(sqlStatement, 1, id);
+
+        int resultCode = sqlite3_step(sqlStatement);
+
+        // Liberar memoria
+        sqlite3_finalize(sqlStatement);
+
+        // Validar ejecucion
+        if (resultCode != SQLITE_DONE) {
+            return sqliteError(CODE_ERROR_DB, "deleteTournament::step");
+        }
+
+        return { id, CODE_TOURNAMENT_DELETED, "Torneo eliminado correctamente" };
+    }
+    catch (exception& e) {
+        cout << "DB Exception: " << string(e.what());
+        return { -1, CODE_EXCEPTION, "Excepcion no esperada en deleteTournament" };
+    }
+    catch (...) {
+        return { -1, CODE_EXCEPTION, "Excepcion desconocida en deleteTournament" };
+    }
+}
+
 
 // ============================================================
 //  TB_TEAM

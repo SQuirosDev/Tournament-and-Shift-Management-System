@@ -4,6 +4,7 @@
 #include "logTeam.h"
 #include "LogHistoric.h"
 #include "validations.h"
+#include "factories.h"
 
 LogTeam::LogTeam(Connection& dbConnection) : connection_(dbConnection) {
     logHistoric = nullptr;

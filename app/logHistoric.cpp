@@ -7,11 +7,13 @@
 #include "logPlayer.h"
 #include "logPetition.h"
 #include "logTeam.h"
+#include "logTournament.h"
 
 LogHistoric::LogHistoric(Connection& dbConnection) : connection(dbConnection) {
     logPlayer = nullptr;
     logPetition = nullptr;
     logTeam = nullptr;
+    logTournament = nullptr;
 }
 
 void LogHistoric::setLogPlayer(LogPlayer* player) {
@@ -24,6 +26,10 @@ void LogHistoric::setLogPetition(LogPetition* petition) {
 
 void LogHistoric::setLogTeam(LogTeam* team) {
     logTeam = team;
+}
+
+void LogHistoric::setLogTournament(LogTournament* tournament) {
+    logTournament = tournament;
 }
 
 BackendResponse LogHistoric::insert(Historic h) {
@@ -60,6 +66,9 @@ BackendResponse LogHistoric::undo() {
     }
     else if (last.entityType == "Team") {
         undoResponse = undoTeam(last);
+    }
+    else if (last.entityType == "Tournament") {
+        undoResponse = undoTournament(last);
     }
     else {
         return {-1,  CODE_UNDO_NOT_AVAILABLE, "Entidad no soportada" };
@@ -146,6 +155,32 @@ BackendResponse LogHistoric::undoTeam(Historic& h) {
         string name = prev.value("name", "");
         string tournamentId = prev.value("tournamentId", "");
         return logTeam->insert(name, stoi(tournamentId) );
+    }
+
+    return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };
+}
+
+BackendResponse LogHistoric::undoTournament(Historic& h) {
+    json prev;
+
+    try {
+        prev = json::parse(h.previousData);
+    }
+    catch (...) {
+        return { -1, CODE_HISTORIC_JSON_ERROR, "Error parseando JSON en previousData" };
+    }
+
+    if (h.actionType == "Insert") {
+        return logTournament->eliminar(h.recordId);
+    }
+    else if (h.actionType == "Update") {
+        string name = prev.value("name", "");
+        return logTournament->updateName(h.recordId, name);
+    }
+    else if (h.actionType == "Delete") {
+        string name = prev.value("name", "");
+        string id = prev.value("id", "");
+        return logTournament->insert(name);
     }
 
     return { -1, CODE_HISTORIC_INVALID_DATA, "Accion no soportada para PETITION" };
