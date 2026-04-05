@@ -67,7 +67,7 @@ BackendResponse LogPetition::update(int id, string responseText) {
     return response;
 }
 
-BackendQueryResponse<Petition> LogPetition::peekNextPetition() {
+BackendQueryResponse<Petition> LogPetition::peekNext() {
 
     DBQueryResponse Response = connection_.obtainNextPetition();
 
@@ -78,7 +78,7 @@ BackendQueryResponse<Petition> LogPetition::peekNextPetition() {
     return dbQueryResponseFactory(Response);
 }
 
-BackendQueryResponse<Petition> LogPetition::listPendingPetitions() {
+BackendQueryResponse<Petition> LogPetition::listPending() {
 
     return dbQueryResponseFactory(connection_.listPendingPetitions());
 }

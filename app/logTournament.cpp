@@ -153,7 +153,7 @@ BackendResponse LogTournament::eliminar(int id) {
 
     string previousData = "{ \"id\": " + to_string(tournament.id) + ", \"name\": \"" + tournament.name + "\", \"phase\": \"" + tournament.phase + "\" }";
 
-    BackendResponse response = dbResponseFactory(connection_.deleteTeam(id));
+    BackendResponse response = dbResponseFactory(connection_.deleteTournament(id));
 
     if (response.code >= 4000 && response.code < 5000) {
         return response;

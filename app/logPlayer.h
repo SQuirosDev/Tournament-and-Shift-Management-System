@@ -17,7 +17,7 @@ public:
     void setLogHistoric(LogHistoric* historic);
     BackendResponse insert(int teamId, string playerName);
     BackendQueryResponse<Player> listByTeam(int teamId);
-    BackendQueryResponse<Player> getById(int playerId);
+    BackendQueryResponse<Player> obtainById(int playerId);
     BackendResponse update(int playerId, string newName);
     BackendResponse eliminar(int playerId);
 

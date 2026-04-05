@@ -62,7 +62,7 @@ BackendResponse LogMatch::update(int id, string phase, int round, string status,
         return { -1, CODE_MATCH_INVALID_DATA, "Datos invalidos para actualizar marcador." };
     }
 
-    if (round < 0 && round >= 3) {
+    if (round < 0 || round >= 3) {
         return { -1, CODE_MATCH_INVALID_DATA, "Datos invalidos para actualizar marcador." };
     }
 
@@ -74,16 +74,76 @@ BackendResponse LogMatch::update(int id, string phase, int round, string status,
 
     Match match = queryResponse.data[0];
 
-    string previousData = "{ \"id\": " + to_string(match.id) + ", \"tournamentId\": " + to_string(match.tournamentId) + ", \"teamAId\": " + to_string(match.teamAId) + ", \"teamBId\": " + to_string(match.teamBId) + ", \"phase\": \"" + match.phase + "\", \"round\": " + to_string(match.round) + ", \"status\": \"" + match.status + "\", \"winnerId\": " + to_string(match.winnerId) + ", \"result\": \"" + match.result + "\", \"queuePosition\": " + to_string(match.queuePosition) + " }";
-    string newData = "{ \"id\": " + to_string(match.id) + ", \"tournamentId\": " + to_string(match.tournamentId) + ", \"teamAId\": " + to_string(match.teamAId) + ", \"teamBId\": " + to_string(match.teamBId) + ", \"phase\": \"" + phase + "\", \"round\": " + to_string(round) + ", \"status\": \"" + status + "\", \"winnerId\": " + to_string(winnerId) + ", \"result\": \"" + result + "\", \"queuePosition\": " + to_string(match.queuePosition) + " }";
-
     BackendResponse response = dbResponseFactory(connection_.updateMatch(id, phase, round, status, winnerId, result));
 
     if (response.code >= 4000 && response.code < 5000) {
         return response;
     }
 
-    logHistoric->insert(historicFactory("Update", "Match", response.id, previousData, newData));
+    if (status == "Finalizado") {
+
+        int teamAId = match.teamAId;
+        int teamBId = match.teamBId;
+
+        int pointsA = 0, winsA = 0, drawsA = 0, lossesA = 0;
+        int pointsB = 0, winsB = 0, drawsB = 0, lossesB = 0;
+
+        // Empate
+        if (winnerId == 0) {
+            pointsA = 1;
+            drawsA = 1;
+
+            pointsB = 1;
+            drawsB = 1;
+        }
+        // Gana A
+        else if (winnerId == teamAId) {
+            pointsA = 3;
+            winsA = 1;
+
+            lossesB = 1;
+        }
+        // Gana B
+        else if (winnerId == teamBId) {
+            pointsB = 3;
+            winsB = 1;
+
+            lossesA = 1;
+        }
+        else {
+            return { -1, CODE_MATCH_INVALID_DATA, "WinnerId no corresponde a los equipos" };
+        }
+
+        // Actualizar Team A
+        BackendQueryResponse<Team> queryResponseA = dbQueryResponseFactory<Team>(connection_.obtainTeamById(teamAId));
+
+        if (queryResponseA.data.empty()) {
+            return { -1, CODE_TEAM_NOT_FOUND, "Equipo no encontrado." };
+        }
+
+        Team teamA = queryResponseA.data[0];
+
+        BackendResponse teamAResponseA = dbResponseFactory(connection_.updateTeamStats(teamAId, teamA.points + pointsA, teamA.wins + winsA, teamA.draws + drawsA, teamA.losses + lossesA));
+
+        if (teamAResponseA.code >= 4000 && teamAResponseA.code < 5000) {
+            return teamAResponseA;
+        }
+
+        // Actualizar Team B
+        BackendQueryResponse<Team> queryResponseB = dbQueryResponseFactory<Team>(connection_.obtainTeamById(teamBId));
+
+        if (queryResponseB.data.empty()) {
+            return { -1, CODE_TEAM_NOT_FOUND, "Equipo no encontrado." };
+        }
+
+        Team teamB = queryResponseB.data[0];
+
+        BackendResponse teamBResponseB = dbResponseFactory(connection_.updateTeamStats(teamBId, teamB.points + pointsB, teamB.wins + winsB, teamB.draws + drawsB, teamB.losses + lossesB));
+
+        if (teamBResponseB.code >= 4000 && teamBResponseB.code < 5000) {
+            return teamBResponseB;
+        }
+    }
 
     return response;
 }

@@ -19,8 +19,8 @@ public:
     void setLogHistoric(LogHistoric* historic);
     BackendResponse insert(string requesterName, string type, string description);
     BackendResponse update(int id, string responseText);
-    BackendQueryResponse<Petition> peekNextPetition();
-    BackendQueryResponse<Petition> listPendingPetitions();
+    BackendQueryResponse<Petition> peekNext();
+    BackendQueryResponse<Petition> listPending();
     BackendResponse eliminar(int id);
     int pendingCount();
 

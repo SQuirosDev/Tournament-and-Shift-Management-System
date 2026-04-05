@@ -627,7 +627,7 @@ DbResponse Connection::updateTeam(int id, string newName) {
     }
 }
 
-DbResponse Connection::updateTeamStats(int id, int points, int wins, int draws, int losses) {
+DbResponse Connection::updateTeamStats(int id, int points, int wins, int losses, int draws) {
     try {
         string checkExistQuery = "SELECT COUNT(*) FROM TB_TEAM WHERE ID = " + to_string(id) + ";";
         if (!rowExists(db_, checkExistQuery)) {

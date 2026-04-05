@@ -44,7 +44,7 @@ BackendQueryResponse<Player> LogPlayer::listByTeam(int teamId) {
     return dbQueryResponseFactory<Player>(connection_.listPlayersByTeam(teamId));
 }
 
-BackendQueryResponse<Player> LogPlayer::getById(int playerId) {
+BackendQueryResponse<Player> LogPlayer::obtainById(int playerId) {
 
     if (playerId <= 0) {
         return { {}, CODE_PLAYER_INVALID_DATA, "El ID del jugador no es válido." };
