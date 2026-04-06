@@ -2,6 +2,11 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QInputDialog>
 #include <QtWidgets/QLineEdit>
+#include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QSizePolicy>
+#include <QtWidgets/QListWidget>
+#include <QtWidgets/QListWidgetItem>
 
 using namespace std;
 static QString toQString(const string &s) { return QString::fromStdString(s); }
@@ -11,12 +16,32 @@ teamsDialog::teamsDialog(Connection* conn, QWidget* parent)
 {
     ui.setupUi(this);
     this->setFixedSize(600, 480);
+    // center content with padding and allow list expansion
+    ui.verticalLayoutWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui.listTeams->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    QVBoxLayout* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(40, 20, 40, 20);
+    outer->addStretch();
+    QWidget* centerWrapper = new QWidget(this);
+    QHBoxLayout* hw = new QHBoxLayout(centerWrapper);
+    hw->addStretch();
+    centerWrapper->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    centerWrapper->setMaximumWidth(520);
+    hw->addWidget(ui.verticalLayoutWidget);
+    hw->addStretch();
+    outer->addWidget(centerWrapper);
+    outer->addStretch();
     connect(ui.btnAdd, &QPushButton::clicked, this, &teamsDialog::onAddClicked);
     connect(ui.btnRefresh, &QPushButton::clicked, this, &teamsDialog::onRefresh);
     connect(ui.btnEdit, &QPushButton::clicked, this, &teamsDialog::onEditClicked);
     connect(ui.btnDelete, &QPushButton::clicked, this, &teamsDialog::onDeleteClicked);
     loadTournaments();
     loadTeams();
+
+    ui.listTeams->setFocusPolicy(Qt::StrongFocus);
+    ui.listTeams->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui.listTeams->setUniformItemSizes(true);
+    ui.listTeams->setMinimumHeight(220);
 }
 
 teamsDialog::~teamsDialog() {}
@@ -29,6 +54,8 @@ void teamsDialog::loadTournaments()
     for (auto &t : res.data) {
         ui.cmbTournament->addItem(QString::fromStdString(t.name), QVariant(t.id));
     }
+    // ensure we trigger team load on initial population
+    if (ui.cmbTournament->count() > 0) ui.cmbTournament->setCurrentIndex(0);
 }
 
 void teamsDialog::loadTeams()
@@ -39,8 +66,14 @@ void teamsDialog::loadTeams()
     auto res = conn_->listTeamsByTournament(tournamentId);
     if (res.code < 0) return;
     for (auto &team : res.data) {
-        ui.listTeams->addItem(QString::fromStdString(team.name) + " (id=" + QString::number(team.id) + ")");
+        QListWidgetItem* it = new QListWidgetItem(QString::fromStdString(team.name));
+        it->setData(Qt::UserRole, team.id);
+        it->setForeground(QBrush(QColor("#1d1d1f")));
+        ui.listTeams->addItem(it);
     }
+    ui.listTeams->setFrameShape(QFrame::Box);
+    ui.listTeams->setStyleSheet("background-color: #fbfbfd; color: #1d1d1f; padding: 6px; border-radius: 12px;");
+    ui.listTeams->update();
 }
 
 void teamsDialog::onAddClicked()
@@ -48,11 +81,11 @@ void teamsDialog::onAddClicked()
     string name = ui.edtName->text().toStdString();
     int tournamentId = ui.cmbTournament->currentData().toInt();
     if (name.empty()) {
-        QMessageBox::warning(this, "Validation", "Name cannot be empty");
+        QMessageBox::warning(this, "Validación", "El nombre del equipo no puede estar vacío.");
         return;
     }
     if (tournamentId == 0) {
-        QMessageBox::warning(this, "Validation", "Select a tournament first");
+        QMessageBox::warning(this, "Validación", "Seleccione un torneo primero.");
         return;
     }
     auto resp = conn_->insertTeam(name, tournamentId);
@@ -61,6 +94,7 @@ void teamsDialog::onAddClicked()
         return;
     }
     ui.edtName->clear();
+    // Refresh teams list after successful insertion
     loadTeams();
 }
 
@@ -74,28 +108,36 @@ void teamsDialog::onEditClicked()
 {
     int row = ui.listTeams->currentRow();
     if (row < 0) { QMessageBox::information(this, "Editar", "Seleccione un equipo."); return; }
-    QString item = ui.listTeams->currentItem()->text();
-    int pos = item.indexOf("id="); if (pos == -1) return;
-    QString num = item.mid(pos+3);
-    QString digits; for (QChar c: num) { if (c.isDigit()) digits.append(c); else break; }
-    int id = digits.toInt();
+    QListWidgetItem* it = ui.listTeams->currentItem();
+    if (!it) { QMessageBox::warning(this, "Error", "Seleccione un equipo."); return; }
+    int id = it->data(Qt::UserRole).toInt();
     auto res = conn_->obtainTeamById(id);
-    if (res.code < 0) { QMessageBox::warning(this, "Error", "No se pudo obtener equipo."); return; }
-    bool ok; QString newName = QInputDialog::getText(this, "Editar", "Nombre:", QLineEdit::Normal, QString::fromStdString(res.data[0].name), &ok);
-    if (!ok || newName.trimmed().isEmpty()) return; conn_->updateTeam(id, newName.toStdString()); loadTeams();
+    if (res.code < 0) { QMessageBox::warning(this, "Error", "No se pudo obtener el equipo."); return; }
+    bool ok; QString newName = QInputDialog::getText(this, "Editar equipo", "Nombre del equipo:", QLineEdit::Normal, QString::fromStdString(res.data[0].name), &ok);
+    if (!ok) return;
+    if (newName.trimmed().isEmpty()) { QMessageBox::warning(this, "Validación", "El nombre no puede estar vacío."); return; }
+    auto upr = conn_->updateTeam(id, newName.toStdString());
+    if (upr.code < 0) { QMessageBox::warning(this, "Error", QString::fromStdString(upr.message)); return; }
+    loadTeams();
 }
 
 void teamsDialog::onDeleteClicked()
 {
     int row = ui.listTeams->currentRow();
     if (row < 0) { QMessageBox::information(this, "Eliminar", "Seleccione un equipo."); return; }
-    QString item = ui.listTeams->currentItem()->text();
-    int pos = item.indexOf("id="); if (pos == -1) return;
-    QString num = item.mid(pos+3);
-    QString digits; for (QChar c: num) { if (c.isDigit()) digits.append(c); else break; }
-    int id = digits.toInt();
-    auto confirm = QMessageBox::question(this, "Confirmar", "Eliminar equipo?");
+    QListWidgetItem* it = ui.listTeams->currentItem();
+    if (!it) return;
+    int id = it->data(Qt::UserRole).toInt();
+    QMessageBox confirmBox(this);
+    confirmBox.setIcon(QMessageBox::Question);
+    confirmBox.setWindowTitle("Confirmar eliminación");
+    confirmBox.setText("¿Eliminar el equipo seleccionado?");
+    confirmBox.setInformativeText("Esta acción no se puede deshacer.");
+    confirmBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    confirmBox.setDefaultButton(QMessageBox::No);
+    int confirm = confirmBox.exec();
     if (confirm != QMessageBox::Yes) return;
-    conn_->deleteTeam(id);
+    auto dr = conn_->deleteTeam(id);
+    if (dr.code < 0) { QMessageBox::warning(this, "Error", QString::fromStdString(dr.message)); return; }
     loadTeams();
 }

@@ -1,6 +1,9 @@
 #include "dialogs/tournamentsdialog.h"
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QInputDialog>
+#include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QListWidgetItem>
 
 using namespace std;
 
@@ -23,10 +26,35 @@ void tournamentsDialog::ensureUi()
     ui.setupUi(this);
     // Normalize size and center handled by DialogManager
     this->setFixedSize(600, 480);
+    // Center the dialog content with padding while allowing the list to expand
+    ui.verticalLayoutWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui.listTournaments->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    QVBoxLayout* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(40, 20, 40, 20);
+    outer->addStretch();
+    QWidget* centerWrapper = new QWidget(this);
+    centerWrapper->setStyleSheet("background: transparent;");
+    ui.verticalLayoutWidget->setStyleSheet("background: transparent;");
+    // Let layouts control geometry instead of the fixed geometry set by the ui file
+    ui.verticalLayoutWidget->setGeometry(0,0,0,0);
+    ui.verticalLayoutWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    ui.listTournaments->setMinimumHeight(240);
+    QHBoxLayout* hw = new QHBoxLayout(centerWrapper);
+    hw->addStretch();
+    centerWrapper->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    centerWrapper->setMaximumWidth(520);
+    hw->addWidget(ui.verticalLayoutWidget);
+    hw->addStretch();
+    outer->addWidget(centerWrapper);
+    outer->addStretch();
+
 
     // Wire up signals
     connect(ui.btnAdd, &QPushButton::clicked, this, &tournamentsDialog::onAddClicked);
     connect(ui.btnRefresh, &QPushButton::clicked, this, &tournamentsDialog::onRefresh);
+    connect(ui.btnEdit, &QPushButton::clicked, this, &tournamentsDialog::onEditClicked);
+    connect(ui.btnDelete, &QPushButton::clicked, this, &tournamentsDialog::onDeleteClicked);
 
     // set texts in Spanish and placeholders
     ui.btnAdd->setText("Crear");
@@ -34,6 +62,12 @@ void tournamentsDialog::ensureUi()
     ui.edtName->setPlaceholderText("Nombre del torneo...");
 
     loadTournaments();
+
+    // Ensure list has expected focus and selection behavior
+    ui.listTournaments->setFocusPolicy(Qt::StrongFocus);
+    ui.listTournaments->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui.listTournaments->setUniformItemSizes(true);
+    ui.listTournaments->setMinimumHeight(240);
 }
 
 void tournamentsDialog::loadTournaments()
@@ -45,8 +79,14 @@ void tournamentsDialog::loadTournaments()
         return;
     }
     for (auto &t : res.data) {
-        ui.listTournaments->addItem(toQString(t.name) + " [" + toQString(t.phase) + "] (id=" + QString::number(t.id) + ")");
+        QListWidgetItem* it = new QListWidgetItem(toQString(t.name) + " [" + toQString(t.phase) + "]");
+        it->setData(Qt::UserRole, t.id);
+        it->setForeground(QBrush(QColor("#1d1d1f")));
+        ui.listTournaments->addItem(it);
     }
+    ui.listTournaments->setFrameShape(QFrame::Box);
+    ui.listTournaments->setStyleSheet("background-color: #fbfbfd; color: #1d1d1f; padding: 6px; border-radius: 12px;");
+    ui.listTournaments->update();
 }
 
 void tournamentsDialog::onAddClicked()
@@ -62,7 +102,16 @@ void tournamentsDialog::onAddClicked()
         return;
     }
     ui.edtName->clear();
+    // Select the newly created item and open teams dialog flow
     loadTournaments();
+    // Find the item with the inserted id and select it
+    for (int i = 0; i < ui.listTournaments->count(); ++i) {
+        QListWidgetItem* it = ui.listTournaments->item(i);
+        if (it && it->data(Qt::UserRole).toInt() == resp.id) {
+            ui.listTournaments->setCurrentItem(it);
+            break;
+        }
+    }
 }
 
 void tournamentsDialog::onRefresh()
@@ -77,18 +126,9 @@ void tournamentsDialog::onEditClicked()
         QMessageBox::information(this, "Editar", "Seleccione un torneo para editar.");
         return;
     }
-    // Parse id from item text (simple parse since format is name [phase] (id=X))
-    QString itemText = ui.listTournaments->currentItem()->text();
-    // Extract id using simple parsing
-    int id = -1;
-    int pos = itemText.indexOf("id=");
-    if (pos != -1) {
-        QString num = itemText.mid(pos + 3);
-        // remove non-digits
-        QString digits;
-        for (QChar c : num) { if (c.isDigit()) digits.append(c); else break; }
-        id = digits.toInt();
-    }
+    QListWidgetItem* it = ui.listTournaments->currentItem();
+    if (!it) return;
+    int id = it->data(Qt::UserRole).toInt();
     if (id <= 0) return;
     auto res = conn_->obtainTournamentById(id);
     if (res.code < 0) {
@@ -100,6 +140,8 @@ void tournamentsDialog::onEditClicked()
     if (!ok || newName.trimmed().isEmpty()) return;
     conn_->updateTournamentName(id, newName.toStdString());
     loadTournaments();
+    ui.listTournaments->repaint();
+    ui.listTournaments->update();
 }
 
 void tournamentsDialog::onDeleteClicked()
@@ -109,21 +151,23 @@ void tournamentsDialog::onDeleteClicked()
         QMessageBox::information(this, "Eliminar", "Seleccione un torneo para eliminar.");
         return;
     }
-    QString itemText = ui.listTournaments->currentItem()->text();
-    int id = -1;
-    int pos = itemText.indexOf("id=");
-    if (pos != -1) {
-        QString num = itemText.mid(pos + 3);
-        QString digits;
-        for (QChar c : num) { if (c.isDigit()) digits.append(c); else break; }
-        id = digits.toInt();
-    }
+    QListWidgetItem* it = ui.listTournaments->currentItem();
+    if (!it) return;
+    int id = it->data(Qt::UserRole).toInt();
     if (id <= 0) return;
-    auto confirm = QMessageBox::question(this, "Confirmar", "¿Eliminar este torneo? Esta acción no se puede deshacer.");
-    if (confirm != QMessageBox::Yes) return;
-    // If Connection supports deleteTournament, use it; otherwise mark as TODO
-    // conn_->deleteTournament(id);
-    // fallback: show not implemented message
-    QMessageBox::information(this, "Info", "Eliminación no implementada en la capa de conexión.");
+    QMessageBox confirmBox(this);
+    confirmBox.setIcon(QMessageBox::Question);
+    confirmBox.setWindowTitle("Confirmar eliminación");
+    confirmBox.setText("¿Eliminar el torneo seleccionado?");
+    confirmBox.setInformativeText("Esta acción no se puede deshacer.");
+    confirmBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    confirmBox.setDefaultButton(QMessageBox::No);
+    int answer = confirmBox.exec();
+    if (answer != QMessageBox::Yes) return;
+    auto resp = conn_->deleteTournament(id);
+    if (resp.code < 0) {
+        QMessageBox::warning(this, "Error", QString::fromStdString(resp.message));
+        return;
+    }
     loadTournaments();
 }

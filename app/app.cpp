@@ -290,6 +290,22 @@ app::app(QWidget *parent)
             border-radius: 20px;
         }
 
+        /* Message boxes */
+        QMessageBox {
+            background-color: #ffffff;
+            color: #1d1d1f;
+        }
+        QMessageBox QLabel#qt_msgbox_label, QMessageBox QLabel#qt_msgboxexplainlabel, QMessageBox QLabel {
+            color: #1d1d1f;
+            font-size: 10pt;
+        }
+        QMessageBox QPushButton {
+            background-color: #f5f5f7;
+            border: 1px solid #e6e6ea;
+            border-radius: 8px;
+            padding: 6px 12px;
+        }
+
         /* List styling */
         QListWidget {
             border: 1px solid #d2d2d7;
