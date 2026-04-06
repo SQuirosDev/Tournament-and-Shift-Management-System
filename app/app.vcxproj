@@ -158,13 +158,10 @@
     <ClInclude Include="validations.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app\resources\icons\matches.svg" />
-    <None Include="app\resources\icons\player.svg" />
-    <None Include="app\resources\icons\teams.svg" />
-    <None Include="resources\icons\trophy.svg" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="app\resources\icons\placeholder.txt" />
+    <Image Include="..\..\..\..\..\Downloads\group.png" />
+    <Image Include="..\..\..\..\..\Downloads\person.png" />
+    <Image Include="..\..\..\..\..\Downloads\puzzle.png" />
+    <Image Include="..\..\..\..\..\Downloads\trophy.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
