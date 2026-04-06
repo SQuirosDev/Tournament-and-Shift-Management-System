@@ -32,7 +32,10 @@ teamsDialog::teamsDialog(Connection* conn, QWidget* parent)
     outer->addWidget(centerWrapper);
     outer->addStretch();
     connect(ui.btnAdd, &QPushButton::clicked, this, &teamsDialog::onAddClicked);
-    connect(ui.btnRefresh, &QPushButton::clicked, this, &teamsDialog::onRefresh);
+    // Refresh button not needed: lists refresh automatically on changes
+    if (ui.btnRefresh) ui.btnRefresh->hide();
+    // Ensure teams reload when tournament selection changes
+    connect(ui.cmbTournament, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &teamsDialog::loadTeams);
     connect(ui.btnEdit, &QPushButton::clicked, this, &teamsDialog::onEditClicked);
     connect(ui.btnDelete, &QPushButton::clicked, this, &teamsDialog::onDeleteClicked);
     loadTournaments();

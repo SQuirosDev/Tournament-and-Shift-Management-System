@@ -24,4 +24,9 @@ private:
     void onRefresh();
     void onEditClicked();
     void onDeleteClicked();
+    void onChangePhaseClicked();
+
+    // runtime controls
+    QComboBox* cmbPhase_ = nullptr;
+    QPushButton* btnChangePhase_ = nullptr;
 };

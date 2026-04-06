@@ -29,7 +29,8 @@ playersDialog::playersDialog(Connection* conn, QWidget* parent)
     outer->addWidget(centerWrapper);
     outer->addStretch();
     connect(ui.btnAdd, &QPushButton::clicked, this, &playersDialog::onAddClicked);
-    connect(ui.btnRefresh, &QPushButton::clicked, this, &playersDialog::onRefresh);
+    // Hide explicit refresh button; lists update on related actions
+    if (ui.btnRefresh) ui.btnRefresh->hide();
     connect(ui.btnEdit, &QPushButton::clicked, this, &playersDialog::onEditClicked);
     connect(ui.btnDelete, &QPushButton::clicked, this, &playersDialog::onDeleteClicked);
     connect(ui.cmbTeam, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &playersDialog::loadPlayers);
@@ -90,7 +91,13 @@ void playersDialog::onAddClicked()
     }
     int teamId = ui.cmbTeam->currentData().toInt();
     if (teamId == 0) {
-        QMessageBox::warning(this, "Validación", "Seleccione un equipo (use el diálogo de Equipos para crear equipos primero).");
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Warning);
+        box.setWindowTitle("Validación");
+        box.setText("Seleccione un equipo.");
+        box.setInformativeText("Use el diálogo de Equipos para crear equipos primero.");
+        box.setStandardButtons(QMessageBox::Ok);
+        box.exec();
         return;
     }
     auto resp = conn_->insertPlayer(name.toStdString(), teamId);

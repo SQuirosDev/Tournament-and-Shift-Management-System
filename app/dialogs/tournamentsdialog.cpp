@@ -4,6 +4,8 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QListWidgetItem>
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QPushButton>
 
 using namespace std;
 
@@ -55,6 +57,37 @@ void tournamentsDialog::ensureUi()
     connect(ui.btnRefresh, &QPushButton::clicked, this, &tournamentsDialog::onRefresh);
     connect(ui.btnEdit, &QPushButton::clicked, this, &tournamentsDialog::onEditClicked);
     connect(ui.btnDelete, &QPushButton::clicked, this, &tournamentsDialog::onDeleteClicked);
+
+    // Runtime phase controls (combo + action button) inserted into the existing actions layout
+    cmbPhase_ = new QComboBox(ui.verticalLayoutWidget);
+    cmbPhase_->addItem("Grupos");
+    cmbPhase_->addItem("Eliminacion");
+    btnChangePhase_ = new QPushButton("Cambiar Fase", ui.verticalLayoutWidget);
+    btnChangePhase_->setMinimumWidth(120);
+    // disabled until a tournament is selected
+    btnChangePhase_->setEnabled(false);
+    // Insert widgets into the second horizontal layout that already contains edit/delete/refresh
+    if (ui.horizontalLayout2) {
+        ui.horizontalLayout2->addWidget(cmbPhase_);
+        ui.horizontalLayout2->addWidget(btnChangePhase_);
+    }
+    connect(btnChangePhase_, &QPushButton::clicked, this, &tournamentsDialog::onChangePhaseClicked);
+
+    // Update phase combobox when the current item changes
+    connect(ui.listTournaments, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* curr, QListWidgetItem* /*prev*/){
+        if (!curr) {
+            if (btnChangePhase_) btnChangePhase_->setEnabled(false);
+            return;
+        }
+        int id = curr->data(Qt::UserRole).toInt();
+        if (id <= 0) return;
+        auto res = conn_->obtainTournamentById(id);
+        if (res.code < 0 || res.data.empty()) return;
+        QString phase = QString::fromStdString(res.data[0].phase);
+        int idx = cmbPhase_->findText(phase);
+        if (idx >= 0) cmbPhase_->setCurrentIndex(idx);
+        if (btnChangePhase_) btnChangePhase_->setEnabled(true);
+    });
 
     // set texts in Spanish and placeholders
     ui.btnAdd->setText("Crear");
@@ -117,6 +150,33 @@ void tournamentsDialog::onAddClicked()
 void tournamentsDialog::onRefresh()
 {
     loadTournaments();
+}
+
+void tournamentsDialog::onChangePhaseClicked()
+{
+    QListWidgetItem* it = ui.listTournaments->currentItem();
+    if (!it) {
+        QMessageBox::information(this, "Cambiar fase", "Seleccione un torneo para cambiar la fase.");
+        return;
+    }
+    int id = it->data(Qt::UserRole).toInt();
+    if (id <= 0) return;
+    QString phase = cmbPhase_ ? cmbPhase_->currentText() : QString();
+    if (phase.isEmpty()) return;
+    auto resp = conn_->updateTournamentPhase(id, phase.toStdString());
+    if (resp.code < 0) {
+        QMessageBox::warning(this, "Error", QString::fromStdString(resp.message));
+        return;
+    }
+    // Refresh list and reselect updated item
+    loadTournaments();
+    for (int i = 0; i < ui.listTournaments->count(); ++i) {
+        QListWidgetItem* nit = ui.listTournaments->item(i);
+        if (nit && nit->data(Qt::UserRole).toInt() == id) {
+            ui.listTournaments->setCurrentItem(nit);
+            break;
+        }
+    }
 }
 
 void tournamentsDialog::onEditClicked()

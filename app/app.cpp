@@ -450,21 +450,21 @@ void app::updateUiState()
 
 void app::onPlayersClicked()
 {
-    QMessageBox::information(this, "Players", "Open Players form (not implemented yet)");
+    QMessageBox::information(this, "Jugadores", "Abrir formulario de Jugadores (no implementado aún)");
 }
 
 void app::onTeamsClicked()
 {
-    QMessageBox::information(this, "Teams", "Open Teams form (not implemented yet)");
+    QMessageBox::information(this, "Equipos", "Abrir formulario de Equipos (no implementado aún)");
 }
 
 void app::onTournamentsClicked()
 {
-    QMessageBox::information(this, "Tournaments", "Open Tournaments form (not implemented yet)");
+    QMessageBox::information(this, "Torneos", "Abrir formulario de Torneos (no implementado aún)");
 }
 
 void app::onMatchesClicked()
 {
-    QMessageBox::information(this, "Matches", "Use the Matches button to open the Matches dialog");
+    QMessageBox::information(this, "Partidos", "Use el botón Partidos para abrir el diálogo de Partidos");
 }
 

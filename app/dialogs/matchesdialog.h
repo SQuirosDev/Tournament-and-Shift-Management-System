@@ -11,6 +11,8 @@ public:
 
 private slots:
     void onAddClicked();
+    void onEditClicked();
+    void onDeleteClicked();
     void onRefresh();
 
 private:
