@@ -5,6 +5,7 @@
 #include "factories.h"
 #include "Matches.h"
 #include "Teams.h"
+#include "queueMatch.h"
 
 using namespace std;
 
@@ -48,13 +49,19 @@ BackendResponse LogGame::playGroupMatches(int tournamentId) {
         return { -1, CODE_GAME_INVALID_MATCHES, "No hay partidos de grupos." };
     }
 
+    QueueMatch matchQueue;
+
+    // Encolar en orden (ya viene ordenado por queue_position)
     for (int i = 0; i < matchResponse.data.size(); i++) {
-
-        Match match = matchResponse.data[i];
-
-        if (match.status == "Finalizado") {
-            continue;
+        if (matchResponse.data[i].status != "Finalizado") {
+            matchQueue.enqueue(matchResponse.data[i]);
         }
+    }
+
+    while (!matchQueue.isEmpty()) {
+
+        Match match = matchQueue.front();
+        matchQueue.dequeue();
 
         int scoreA = rand() % 5;
         int scoreB = rand() % 5;
@@ -130,13 +137,18 @@ BackendResponse LogGame::playSemiMatches(int tournamentId) {
         return { -1, CODE_GAME_INVALID_MATCHES, "No hay partidos de semifinal." };
     }
 
+    QueueMatch matchQueue;
+
     for (int i = 0; i < matchResponse.data.size(); i++) {
-
-        Match match = matchResponse.data[i];
-
-        if (match.status == "Finalizado" || match.round != 1) {
-            continue;
+        if (matchResponse.data[i].status != "Finalizado" && matchResponse.data[i].round == 1) {
+            matchQueue.enqueue(matchResponse.data[i]);
         }
+    }
+
+    while (!matchQueue.isEmpty()) {
+
+        Match match = matchQueue.front();
+        matchQueue.dequeue();
 
         int scoreA = rand() % 5;
         int scoreB = rand() % 5;

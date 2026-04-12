@@ -2,8 +2,6 @@
 
 #include "stackHistoric.h"
 
-NodeHistoric* topNode;
-
 StackHistoric::StackHistoric() : topNode(nullptr) {}
 
 StackHistoric::~StackHistoric() {

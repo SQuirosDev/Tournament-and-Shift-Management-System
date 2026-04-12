@@ -112,6 +112,9 @@
     <ClCompile Include="logGame.cpp">
       <Filter>Source Files\logics</Filter>
     </ClCompile>
+    <ClCompile Include="queueMatch.cpp">
+      <Filter>Source Files\data</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -161,9 +164,6 @@
     </ClInclude>
     <ClInclude Include="validations.h">
       <Filter>Source Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="queue.h">
-      <Filter>Source Files\data</Filter>
     </ClInclude>
     <ClInclude Include="stackHistoric.h">
       <Filter>Source Files\data</Filter>
@@ -221,6 +221,12 @@
     </ClInclude>
     <ClInclude Include="logGame.h">
       <Filter>Source Files\logics</Filter>
+    </ClInclude>
+    <ClInclude Include="queueMatch.h">
+      <Filter>Source Files\data</Filter>
+    </ClInclude>
+    <ClInclude Include="nodeMatch.h">
+      <Filter>Source Files\models</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

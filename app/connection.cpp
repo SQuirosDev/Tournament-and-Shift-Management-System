@@ -1002,6 +1002,11 @@ DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
 
 DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string phase) {
     try {
+        string checkTournamentQuery = "SELECT COUNT(*) FROM TB_TOURNAMENT WHERE ID = " + to_string(tournamentId) + ";";
+        if (!rowExists(db_, checkTournamentQuery)) {
+            return { {}, CODE_TOURNAMENT_NOT_FOUND, "Torneo con ID " + to_string(tournamentId) + " no encontrado" };
+        }
+
         string sqlQuery =
             "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
             "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND PHASE = ? ORDER BY QUEUE_POSITION ASC;";
