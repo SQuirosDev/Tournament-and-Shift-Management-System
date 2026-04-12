@@ -109,6 +109,9 @@
     <ClCompile Include="logMatch.cpp">
       <Filter>Source Files\logics</Filter>
     </ClCompile>
+    <ClCompile Include="logGame.cpp">
+      <Filter>Source Files\logics</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -215,6 +218,9 @@
     </ClInclude>
     <ClInclude Include="dialogs\dialog_manager.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="logGame.h">
+      <Filter>Source Files\logics</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

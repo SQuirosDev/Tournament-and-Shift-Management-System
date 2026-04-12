@@ -634,7 +634,7 @@ DbResponse Connection::updateTeamStats(int id, int points, int wins, int losses,
             return { -1, CODE_TEAM_NOT_FOUND, "Equipo con ID " + to_string(id) + " no encontrado" };
         }
 
-        string sqlQuery = "UPDATE TB_TEAM SET POINTS = ?, WINS = ?, DRAWS = ?, LOSSES = ? WHERE ID = ?;";
+        string sqlQuery = "UPDATE TB_TEAM SET POINTS = POINTS + ?, WINS = WINS + ?, DRAWS = DRAWS + ?, LOSSES = LOSSES + ? WHERE ID = ? ;";
         int resultCode = executeNonQuery(sqlQuery, {
             paramInt(points), paramInt(wins), paramInt(draws), paramInt(losses), paramInt(id)
             });

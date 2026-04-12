@@ -105,6 +105,7 @@
     <ClCompile Include="dialogs\tournamentsdialog.cpp" />
     <ClCompile Include="factories.cpp" />
     <ClCompile Include="helpers.cpp" />
+    <ClCompile Include="logGame.cpp" />
     <ClCompile Include="logHistoric.cpp" />
     <ClCompile Include="logMatch.cpp" />
     <ClCompile Include="logPetition.cpp" />
@@ -139,6 +140,7 @@
     <ClInclude Include="codes.h" />
     <ClInclude Include="connection.h" />
     <ClInclude Include="json.hpp" />
+    <ClInclude Include="logGame.h" />
     <ClInclude Include="logHistoric.h" />
     <ClInclude Include="logMatch.h" />
     <ClInclude Include="logPetition.h" />
@@ -158,10 +160,13 @@
     <ClInclude Include="validations.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\..\..\..\..\Downloads\group.png" />
-    <Image Include="..\..\..\..\..\Downloads\person.png" />
-    <Image Include="..\..\..\..\..\Downloads\puzzle.png" />
-    <Image Include="..\..\..\..\..\Downloads\trophy.png" />
+    <None Include="app\resources\icons\matches.svg" />
+    <None Include="app\resources\icons\player.svg" />
+    <None Include="app\resources\icons\teams.svg" />
+    <None Include="resources\icons\trophy.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="app\resources\icons\placeholder.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
