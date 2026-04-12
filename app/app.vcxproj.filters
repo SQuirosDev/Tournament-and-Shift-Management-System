@@ -115,6 +115,9 @@
     <ClCompile Include="queueMatch.cpp">
       <Filter>Source Files\data</Filter>
     </ClCompile>
+    <ClCompile Include="queuePetition.cpp">
+      <Filter>Source Files\data</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -227,6 +230,12 @@
     </ClInclude>
     <ClInclude Include="nodeMatch.h">
       <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="nodePetition.h">
+      <Filter>Source Files\models</Filter>
+    </ClInclude>
+    <ClInclude Include="queuePetition.h">
+      <Filter>Source Files\data</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

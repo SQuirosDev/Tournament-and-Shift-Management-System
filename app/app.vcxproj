@@ -113,6 +113,7 @@
     <ClCompile Include="logTeam.cpp" />
     <ClCompile Include="logTournament.cpp" />
     <ClCompile Include="queueMatch.cpp" />
+    <ClCompile Include="queuePetition.cpp" />
     <ClCompile Include="sqlite3.c" />
     <ClCompile Include="stackHistoric.cpp" />
     <ClCompile Include="validations.cpp" />
@@ -151,10 +152,12 @@
     <ClInclude Include="matches.h" />
     <ClInclude Include="nodeHistoric.h" />
     <ClInclude Include="nodeMatch.h" />
+    <ClInclude Include="nodePetition.h" />
     <ClInclude Include="petitions.h" />
     <ClInclude Include="players.h" />
     <ClInclude Include="dbQueryResponse.h" />
     <ClInclude Include="queueMatch.h" />
+    <ClInclude Include="queuePetition.h" />
     <ClInclude Include="sqlite3.h" />
     <ClInclude Include="stackHistoric.h" />
     <ClInclude Include="teams.h" />

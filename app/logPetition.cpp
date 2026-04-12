@@ -2,6 +2,7 @@
 #include "logPetition.h"
 #include "LogHistoric.h"
 #include "factories.h"
+#include "queuePetition.h"
 
 LogPetition::LogPetition(Connection& dbConnection) : connection_(dbConnection) {
     logHistoric = nullptr;
@@ -69,13 +70,23 @@ BackendResponse LogPetition::update(int id, string responseText) {
 
 BackendQueryResponse<Petition> LogPetition::peekNext() {
 
-    DBQueryResponse Response = connection_.obtainNextPetition();
+    BackendQueryResponse<Petition> response = dbQueryResponseFactory(connection_.listPendingPetitions());
 
-    if (Response.code >= 4000 && Response.code < 5000) {
+    if (response.code >= 4000 && response.code < 5000 || response.data.empty()) {
         return { {}, CODE_PETITION_NOT_FOUND, "No hay solicitudes pendientes en la cola." };
     }
 
-    return dbQueryResponseFactory(Response);
+    // Crear cola
+    QueuePetition petitionQueue;
+
+    for (int i = 0; i < response.data.size(); i++) {
+        petitionQueue.enqueue(response.data[i]);
+    }
+
+    // Peek (NO dequeue porque es peek)
+    Petition nextPetition = petitionQueue.front();
+
+    return { { nextPetition }, CODE_PETITION_LISTED, "Siguiente peticion obtenida correctamente." };
 }
 
 BackendQueryResponse<Petition> LogPetition::listPending() {
