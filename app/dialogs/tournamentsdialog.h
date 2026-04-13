@@ -1,32 +1,37 @@
 #pragma once
-
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
-#include <QtWidgets/QVBoxLayout>
-#include <QtWidgets/QHBoxLayout>
-#include "connection.h"
-#include "dialogs/ui_tournamentsdialog.h"
-#include "dialogs/dialog_manager.h"
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QLabel>
+#include "logTournament.h"
 
 class tournamentsDialog : public QDialog {
+    Q_OBJECT
 public:
-    tournamentsDialog(Connection* conn, QWidget* parent = nullptr);
+    explicit tournamentsDialog(LogTournament* logTournament, QWidget* parent = nullptr);
     ~tournamentsDialog();
 
 private:
-    Connection* conn_;
-    Ui::tournamentsDialog ui;
+    LogTournament* logTournament_;
+
+    // Widgets
+    QListWidget* listTournaments_;
+    QLineEdit* edtName_;
+    QPushButton* btnEdit_;
+    QPushButton* btnDelete_;
+    QComboBox* cmbPhase_;
+    QWidget* phaseRow_;
+    QLabel* lblSubtitle_;
+
     void loadTournaments();
     void ensureUi();
+
+private slots:
     void onAddClicked();
     void onRefresh();
     void onEditClicked();
     void onDeleteClicked();
     void onChangePhaseClicked();
-
-    // runtime controls
-    QComboBox* cmbPhase_ = nullptr;
-    QPushButton* btnChangePhase_ = nullptr;
 };

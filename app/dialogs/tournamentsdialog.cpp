@@ -1,233 +1,235 @@
 #include "dialogs/tournamentsdialog.h"
-#include <QtWidgets/QMessageBox>
-#include <QtWidgets/QInputDialog>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QListWidgetItem>
-#include <QtWidgets/QComboBox>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QListWidget>
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QWidget>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QInputDialog>
 
-using namespace std;
+static const char* SS_LIST =
+"QListWidget { border:1px solid #e6e6ea; border-radius:12px;"
+"  background:#ffffff; padding:6px; outline:none; color:#1d1d1f; }"
+"QListWidget::item { border-radius:8px; padding:10px 12px;"
+"  margin:1px 0; color:#1d1d1f; }"
+"QListWidget::item:selected { background:#e8f2ff; color:#0071e3; }"
+"QListWidget::item:hover:!selected { background:#f5f5f7; color:#1d1d1f; }";
+static const char* SS_EDIT =
+"QLineEdit { background:#fbfbfd; border:1px solid #e6e6ea; border-radius:10px;"
+"  padding:9px 13px; font-size:13px; color:#1d1d1f; }"
+"QLineEdit:focus { border:2px solid #0071e3; background:white; }";
+static const char* SS_COMBO =
+"QComboBox { background:#fbfbfd; border:1px solid #e6e6ea; border-radius:10px;"
+"  padding:8px 13px; font-size:13px; color:#1d1d1f; }"
+"QComboBox::drop-down { border:none; width:24px; }";
+static const char* SS_PRIMARY =
+"QPushButton { background:#0071e3; color:white; border:none; border-radius:9px;"
+"  padding:8px 18px; font-size:13px; font-weight:600; }"
+"QPushButton:hover { background:#0077ed; } QPushButton:pressed { background:#0062c3; }"
+"QPushButton:disabled { background:#b3d4f5; }";
+static const char* SS_SEC =
+"QPushButton { background:#fbfbfd; color:#1d1d1f; border:1px solid #e6e6ea;"
+"  border-radius:9px; padding:8px 18px; font-size:13px; font-weight:600; }"
+"QPushButton:hover { background:#e8e8ed; } QPushButton:disabled { color:#b0b0b8; }";
+static const char* SS_DANGER =
+"QPushButton { background:#ff3b30; color:white; border:none; border-radius:9px;"
+"  padding:8px 18px; font-size:13px; font-weight:600; }"
+"QPushButton:hover { background:#ff453a; } QPushButton:disabled { background:#ffb3af; }";
 
-static QString toQString(const string &s) { return QString::fromStdString(s); }
-static string toStdString(const QString &s) { return s.toStdString(); }
-
-
-tournamentsDialog::tournamentsDialog(Connection* conn, QWidget* parent)
-    : QDialog(parent), conn_(conn)
+tournamentsDialog::tournamentsDialog(LogTournament* logTournament, QWidget* parent)
+    : QDialog(parent), logTournament_(logTournament)
 {
-    ensureUi();
-}
+    setWindowTitle("Gestionar Torneos");
+    setMinimumSize(540, 420);
+    resize(560, 440);
+    setStyleSheet("QDialog { background:#f5f5f7; }");
 
+    QVBoxLayout* root = new QVBoxLayout(this);
+    root->setSpacing(0);
+    root->setContentsMargins(0, 0, 0, 0);
 
-tournamentsDialog::~tournamentsDialog() {}
+    // Header
+    QWidget* hdr = new QWidget();
+    hdr->setStyleSheet("background:#ffffff; border-bottom:1px solid #e6e6ea;");
+    QHBoxLayout* hdrL = new QHBoxLayout(hdr);
+    hdrL->setContentsMargins(24, 16, 24, 16);
+    hdrL->setSpacing(12);
+    QLabel* ico = new QLabel("T");
+    ico->setFixedSize(40, 40);
+    ico->setAlignment(Qt::AlignCenter);
+    ico->setStyleSheet("background:rgba(0,113,227,0.12); border-radius:10px;"
+        "font-size:16px; font-weight:700; color:#0071e3;");
+    QVBoxLayout* titleCol = new QVBoxLayout();
+    titleCol->setSpacing(1);
+    QLabel* lTitle = new QLabel("Torneos");
+    lTitle->setStyleSheet("font-size:15px; font-weight:700; color:#1d1d1f;");
+    lblSubtitle_ = new QLabel();
+    lblSubtitle_->setStyleSheet("font-size:11px; color:#86868b;");
+    titleCol->addWidget(lTitle);
+    titleCol->addWidget(lblSubtitle_);
+    hdrL->addWidget(ico);
+    hdrL->addLayout(titleCol);
+    hdrL->addStretch();
+    root->addWidget(hdr);
 
+    // Body
+    QWidget* body = new QWidget();
+    body->setStyleSheet("background:#f5f5f7;");
+    QVBoxLayout* bodyL = new QVBoxLayout(body);
+    bodyL->setContentsMargins(20, 14, 20, 14);
+    bodyL->setSpacing(10);
 
-void tournamentsDialog::ensureUi()
-{
-    ui.setupUi(this);
-    // Normalize size and center handled by DialogManager
-    this->setFixedSize(600, 480);
-    // Center the dialog content with padding while allowing the list to expand
-    ui.verticalLayoutWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    ui.listTournaments->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // Barra agregar
+    QWidget* addBar = new QWidget();
+    addBar->setStyleSheet("background:#ffffff; border:1px solid #e6e6ea; border-radius:12px;");
+    QHBoxLayout* addL = new QHBoxLayout(addBar);
+    addL->setContentsMargins(12, 8, 12, 8);
+    addL->setSpacing(8);
+    edtName_ = new QLineEdit();
+    edtName_->setPlaceholderText("Nombre del torneo...");
+    edtName_->setStyleSheet(SS_EDIT);
+    QPushButton* btnAdd = new QPushButton("Agregar");
+    btnAdd->setStyleSheet(SS_PRIMARY);
+    btnAdd->setFixedHeight(36);
+    addL->addWidget(edtName_, 1);
+    addL->addWidget(btnAdd);
+    bodyL->addWidget(addBar);
 
-    QVBoxLayout* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(40, 20, 40, 20);
-    outer->addStretch();
-    QWidget* centerWrapper = new QWidget(this);
-    centerWrapper->setStyleSheet("background: transparent;");
-    ui.verticalLayoutWidget->setStyleSheet("background: transparent;");
-    // Let layouts control geometry instead of the fixed geometry set by the ui file
-    ui.verticalLayoutWidget->setGeometry(0,0,0,0);
-    ui.verticalLayoutWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    ui.listTournaments->setMinimumHeight(240);
-    QHBoxLayout* hw = new QHBoxLayout(centerWrapper);
-    hw->addStretch();
-    centerWrapper->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    centerWrapper->setMaximumWidth(520);
-    hw->addWidget(ui.verticalLayoutWidget);
-    hw->addStretch();
-    outer->addWidget(centerWrapper);
-    outer->addStretch();
+    // Lista
+    listTournaments_ = new QListWidget();
+    listTournaments_->setStyleSheet(SS_LIST);
+    listTournaments_->setSelectionMode(QAbstractItemView::SingleSelection);
+    bodyL->addWidget(listTournaments_, 1);
 
+    // Fila fase
+    phaseRow_ = new QWidget();
+    phaseRow_->setStyleSheet("background:#ffffff; border:1px solid #e6e6ea; border-radius:12px;");
+    QHBoxLayout* phL = new QHBoxLayout(phaseRow_);
+    phL->setContentsMargins(12, 8, 12, 8);
+    phL->setSpacing(8);
+    QLabel* lPhase = new QLabel("Fase:");
+    lPhase->setStyleSheet("font-size:12px; font-weight:600; color:#1d1d1f;");
+    cmbPhase_ = new QComboBox();
+    cmbPhase_->addItems({ "Registro", "Grupos", "Eliminacion", "Finalizado" });
+    cmbPhase_->setStyleSheet(SS_COMBO);
+    QPushButton* btnPhase = new QPushButton("Cambiar");
+    btnPhase->setStyleSheet(SS_SEC);
+    phL->addWidget(lPhase);
+    phL->addWidget(cmbPhase_, 1);
+    phL->addWidget(btnPhase);
+    bodyL->addWidget(phaseRow_);
+    phaseRow_->hide();
 
-    // Wire up signals
-    connect(ui.btnAdd, &QPushButton::clicked, this, &tournamentsDialog::onAddClicked);
-    connect(ui.btnRefresh, &QPushButton::clicked, this, &tournamentsDialog::onRefresh);
-    connect(ui.btnEdit, &QPushButton::clicked, this, &tournamentsDialog::onEditClicked);
-    connect(ui.btnDelete, &QPushButton::clicked, this, &tournamentsDialog::onDeleteClicked);
+    // Toolbar
+    QHBoxLayout* toolL = new QHBoxLayout();
+    toolL->setSpacing(8);
+    btnEdit_ = new QPushButton("Editar nombre");
+    btnDelete_ = new QPushButton("Eliminar");
+    QPushButton* btnRefresh = new QPushButton("Actualizar");
+    btnEdit_->setStyleSheet(SS_SEC);
+    btnDelete_->setStyleSheet(SS_DANGER);
+    btnRefresh->setStyleSheet(SS_SEC);
+    btnEdit_->setEnabled(false);
+    btnDelete_->setEnabled(false);
+    toolL->addWidget(btnEdit_);
+    toolL->addWidget(btnDelete_);
+    toolL->addStretch();
+    toolL->addWidget(btnRefresh);
+    bodyL->addLayout(toolL);
 
-    // Runtime phase controls (combo + action button) inserted into the existing actions layout
-    cmbPhase_ = new QComboBox(ui.verticalLayoutWidget);
-    cmbPhase_->addItem("Grupos");
-    cmbPhase_->addItem("Eliminacion");
-    btnChangePhase_ = new QPushButton("Cambiar Fase", ui.verticalLayoutWidget);
-    btnChangePhase_->setMinimumWidth(120);
-    // disabled until a tournament is selected
-    btnChangePhase_->setEnabled(false);
-    // Insert widgets into the second horizontal layout that already contains edit/delete/refresh
-    if (ui.horizontalLayout2) {
-        ui.horizontalLayout2->addWidget(cmbPhase_);
-        ui.horizontalLayout2->addWidget(btnChangePhase_);
-    }
-    connect(btnChangePhase_, &QPushButton::clicked, this, &tournamentsDialog::onChangePhaseClicked);
+    root->addWidget(body, 1);
 
-    // Update phase combobox when the current item changes
-    connect(ui.listTournaments, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* curr, QListWidgetItem* /*prev*/){
-        if (!curr) {
-            if (btnChangePhase_) btnChangePhase_->setEnabled(false);
-            return;
+    connect(btnAdd, &QPushButton::clicked, this, &tournamentsDialog::onAddClicked);
+    connect(btnEdit_, &QPushButton::clicked, this, &tournamentsDialog::onEditClicked);
+    connect(btnDelete_, &QPushButton::clicked, this, &tournamentsDialog::onDeleteClicked);
+    connect(btnRefresh, &QPushButton::clicked, this, &tournamentsDialog::onRefresh);
+    connect(edtName_, &QLineEdit::returnPressed, this, &tournamentsDialog::onAddClicked);
+    connect(btnPhase, &QPushButton::clicked, this, &tournamentsDialog::onChangePhaseClicked);
+    connect(listTournaments_, &QListWidget::itemSelectionChanged, this, [this]() {
+        bool sel = !listTournaments_->selectedItems().isEmpty();
+        btnEdit_->setEnabled(sel);
+        btnDelete_->setEnabled(sel);
+        phaseRow_->setVisible(sel);
+        if (sel) {
+            int idx = cmbPhase_->findText(
+                listTournaments_->currentItem()->data(Qt::UserRole + 1).toString());
+            if (idx >= 0) cmbPhase_->setCurrentIndex(idx);
         }
-        int id = curr->data(Qt::UserRole).toInt();
-        if (id <= 0) return;
-        auto res = conn_->obtainTournamentById(id);
-        if (res.code < 0 || res.data.empty()) return;
-        QString phase = QString::fromStdString(res.data[0].phase);
-        int idx = cmbPhase_->findText(phase);
-        if (idx >= 0) cmbPhase_->setCurrentIndex(idx);
-        if (btnChangePhase_) btnChangePhase_->setEnabled(true);
-    });
-
-    // set texts in Spanish and placeholders
-    ui.btnAdd->setText("Crear");
-    ui.btnRefresh->setText("Actualizar");
-    ui.edtName->setPlaceholderText("Nombre del torneo...");
+        });
 
     loadTournaments();
-
-    // Ensure list has expected focus and selection behavior
-    ui.listTournaments->setFocusPolicy(Qt::StrongFocus);
-    ui.listTournaments->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui.listTournaments->setUniformItemSizes(true);
-    ui.listTournaments->setMinimumHeight(240);
 }
+
+tournamentsDialog::~tournamentsDialog() {}
+void tournamentsDialog::ensureUi() {}
 
 void tournamentsDialog::loadTournaments()
 {
-    ui.listTournaments->clear();
-    auto res = conn_->listTournaments();
-    if (res.code < 0) {
-        QMessageBox::warning(this, "Error", QString::fromStdString(res.message));
-        return;
+    listTournaments_->clear();
+    auto res = logTournament_->list();
+    for (const auto& t : res.data) {
+        QString name = QString::fromStdString(t.name);
+        QString phase = QString::fromStdString(t.phase);
+        QListWidgetItem* item = new QListWidgetItem(
+            QString("%1  —  %2").arg(name, phase), listTournaments_);
+        item->setData(Qt::UserRole, t.id);
+        item->setData(Qt::UserRole + 1, phase);
+        listTournaments_->addItem(item);
     }
-    for (auto &t : res.data) {
-        QListWidgetItem* it = new QListWidgetItem(toQString(t.name) + " [" + toQString(t.phase) + "]");
-        it->setData(Qt::UserRole, t.id);
-        it->setForeground(QBrush(QColor("#1d1d1f")));
-        ui.listTournaments->addItem(it);
-    }
-    ui.listTournaments->setFrameShape(QFrame::Box);
-    ui.listTournaments->setStyleSheet("background-color: #fbfbfd; color: #1d1d1f; padding: 6px; border-radius: 12px;");
-    ui.listTournaments->update();
+    if (lblSubtitle_)
+        lblSubtitle_->setText(QString("%1 torneo(s)").arg(res.data.size()));
 }
 
 void tournamentsDialog::onAddClicked()
 {
-    QString name = ui.edtName->text().trimmed();
-    if (name.isEmpty()) {
-        QMessageBox::warning(this, "Validación", "El nombre no puede estar vacío.");
-        return;
-    }
-    auto resp = conn_->insertTournament(name.toStdString());
-    if (resp.code < 0) {
-        QMessageBox::warning(this, "Error", QString::fromStdString(resp.message));
-        return;
-    }
-    ui.edtName->clear();
-    // Select the newly created item and open teams dialog flow
-    loadTournaments();
-    // Find the item with the inserted id and select it
-    for (int i = 0; i < ui.listTournaments->count(); ++i) {
-        QListWidgetItem* it = ui.listTournaments->item(i);
-        if (it && it->data(Qt::UserRole).toInt() == resp.id) {
-            ui.listTournaments->setCurrentItem(it);
-            break;
-        }
-    }
-}
-
-void tournamentsDialog::onRefresh()
-{
-    loadTournaments();
-}
-
-void tournamentsDialog::onChangePhaseClicked()
-{
-    QListWidgetItem* it = ui.listTournaments->currentItem();
-    if (!it) {
-        QMessageBox::information(this, "Cambiar fase", "Seleccione un torneo para cambiar la fase.");
-        return;
-    }
-    int id = it->data(Qt::UserRole).toInt();
-    if (id <= 0) return;
-    QString phase = cmbPhase_ ? cmbPhase_->currentText() : QString();
-    if (phase.isEmpty()) return;
-    auto resp = conn_->updateTournamentPhase(id, phase.toStdString());
-    if (resp.code < 0) {
-        QMessageBox::warning(this, "Error", QString::fromStdString(resp.message));
-        return;
-    }
-    // Refresh list and reselect updated item
-    loadTournaments();
-    for (int i = 0; i < ui.listTournaments->count(); ++i) {
-        QListWidgetItem* nit = ui.listTournaments->item(i);
-        if (nit && nit->data(Qt::UserRole).toInt() == id) {
-            ui.listTournaments->setCurrentItem(nit);
-            break;
-        }
-    }
+    QString name = edtName_->text().trimmed();
+    if (name.isEmpty()) { edtName_->setFocus(); return; }
+    auto res = logTournament_->insert(name.toStdString());
+    if (res.code >= 0) { edtName_->clear(); loadTournaments(); }
+    else QMessageBox::warning(this, "Error", QString::fromStdString(res.message));
 }
 
 void tournamentsDialog::onEditClicked()
 {
-    int row = ui.listTournaments->currentRow();
-    if (row < 0) {
-        QMessageBox::information(this, "Editar", "Seleccione un torneo para editar.");
-        return;
-    }
-    QListWidgetItem* it = ui.listTournaments->currentItem();
-    if (!it) return;
-    int id = it->data(Qt::UserRole).toInt();
-    if (id <= 0) return;
-    auto res = conn_->obtainTournamentById(id);
-    if (res.code < 0) {
-        QMessageBox::warning(this, "Error", "No se pudo obtener el torneo.");
-        return;
-    }
+    QListWidgetItem* item = listTournaments_->currentItem();
+    if (!item) return;
+    int id = item->data(Qt::UserRole).toInt();
+    QString current = item->text().split("  —  ").first();
     bool ok;
-    QString newName = QInputDialog::getText(this, "Editar torneo", "Nombre:", QLineEdit::Normal, QString::fromStdString(res.data[0].name), &ok);
-    if (!ok || newName.trimmed().isEmpty()) return;
-    conn_->updateTournamentName(id, newName.toStdString());
-    loadTournaments();
-    ui.listTournaments->repaint();
-    ui.listTournaments->update();
+    QString newName = QInputDialog::getText(this, "Editar torneo",
+        "Nuevo nombre:", QLineEdit::Normal, current, &ok);
+    if (ok && !newName.trimmed().isEmpty()) {
+        auto res = logTournament_->updateName(id, newName.trimmed().toStdString());
+        if (res.code >= 0) loadTournaments();
+        else QMessageBox::warning(this, "Error", QString::fromStdString(res.message));
+    }
 }
 
 void tournamentsDialog::onDeleteClicked()
 {
-    int row = ui.listTournaments->currentRow();
-    if (row < 0) {
-        QMessageBox::information(this, "Eliminar", "Seleccione un torneo para eliminar.");
-        return;
+    QListWidgetItem* item = listTournaments_->currentItem();
+    if (!item) return;
+    if (QMessageBox::warning(this, "Eliminar torneo",
+        "¿Eliminar este torneo? La acción no se puede deshacer.",
+        QMessageBox::Yes | QMessageBox::Cancel) == QMessageBox::Yes) {
+        auto res = logTournament_->eliminar(item->data(Qt::UserRole).toInt());
+        if (res.code >= 0) loadTournaments();
+        else QMessageBox::warning(this, "Error", QString::fromStdString(res.message));
     }
-    QListWidgetItem* it = ui.listTournaments->currentItem();
-    if (!it) return;
-    int id = it->data(Qt::UserRole).toInt();
-    if (id <= 0) return;
-    QMessageBox confirmBox(this);
-    confirmBox.setIcon(QMessageBox::Question);
-    confirmBox.setWindowTitle("Confirmar eliminación");
-    confirmBox.setText("¿Eliminar el torneo seleccionado?");
-    confirmBox.setInformativeText("Esta acción no se puede deshacer.");
-    confirmBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    confirmBox.setDefaultButton(QMessageBox::No);
-    int answer = confirmBox.exec();
-    if (answer != QMessageBox::Yes) return;
-    auto resp = conn_->deleteTournament(id);
-    if (resp.code < 0) {
-        QMessageBox::warning(this, "Error", QString::fromStdString(resp.message));
-        return;
-    }
-    loadTournaments();
+}
+
+void tournamentsDialog::onRefresh() { loadTournaments(); }
+
+void tournamentsDialog::onChangePhaseClicked()
+{
+    QListWidgetItem* item = listTournaments_->currentItem();
+    if (!item || !cmbPhase_) return;
+    auto res = logTournament_->updatePhase(
+        item->data(Qt::UserRole).toInt(),
+        cmbPhase_->currentText().toStdString());
+    if (res.code >= 0) loadTournaments();
+    else QMessageBox::warning(this, "Error", QString::fromStdString(res.message));
 }
