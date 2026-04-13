@@ -110,12 +110,14 @@
     <ClCompile Include="logMatch.cpp" />
     <ClCompile Include="logPetition.cpp" />
     <ClCompile Include="logPlayer.cpp" />
+    <ClCompile Include="logPlayerTest.h" />
     <ClCompile Include="logTeam.cpp" />
     <ClCompile Include="logTournament.cpp" />
     <ClCompile Include="queueMatch.cpp" />
     <ClCompile Include="queuePetition.cpp" />
     <ClCompile Include="sqlite3.c" />
     <ClCompile Include="stackHistoric.cpp" />
+    <ClCompile Include="logPlayerTest.cpp" />
     <ClCompile Include="validations.cpp" />
     <QtRcc Include="app.qrc" />
     <QtUic Include="app.ui" />

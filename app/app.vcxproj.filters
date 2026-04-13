@@ -39,6 +39,9 @@
     <Filter Include="Source Files\utils">
       <UniqueIdentifier>{f211e172-eac0-497d-be43-4857701f8ef6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\tests">
+      <UniqueIdentifier>{2b80e489-bc1f-45cc-b7e9-3f50b09461de}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <QtRcc Include="app.qrc">
@@ -117,6 +120,12 @@
     </ClCompile>
     <ClCompile Include="queuePetition.cpp">
       <Filter>Source Files\data</Filter>
+    </ClCompile>
+    <ClCompile Include="logPlayerTest.cpp">
+      <Filter>Source Files\tests</Filter>
+    </ClCompile>
+    <ClCompile Include="logPlayerTest.h">
+      <Filter>Source Files\tests</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
