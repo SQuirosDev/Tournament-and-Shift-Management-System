@@ -1,6 +1,7 @@
 #pragma once
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QListWidget>
+#include <QtWidgets/QTableWidget>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QLabel>
@@ -26,6 +27,7 @@ private:
     LogTeam* logTeam_;
 
     QListWidget* listMatches_;
+    QTableWidget* tableStandings_;
     QComboBox* cmbTournament_;
     QComboBox* cmbTeamA_;
     QComboBox* cmbTeamB_;
@@ -34,7 +36,6 @@ private:
     QPushButton* btnDeleteMatch_;
     QLabel* lblSubtitle_;
 
-    // Botones de simulación LogGame
     QPushButton* btnGenGroups_;
     QPushButton* btnPlayGroups_;
     QPushButton* btnGenSemi_;
@@ -42,10 +43,10 @@ private:
     QPushButton* btnGenFinal_;
     QPushButton* btnPlayFinal_;
 
-    void runGame(std::function<BackendResponse(int)> action);
     void loadTournaments();
     void loadTeamsForTournament(int tournamentId);
     void loadMatches(int tournamentId);
+    void loadStandings(int tournamentId);
 
 private slots:
     void onAddClicked();

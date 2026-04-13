@@ -136,6 +136,7 @@
     <ClInclude Include="dialogs\ui_playersdialog.h" />
     <ClInclude Include="dialogs\ui_teamsdialog.h" />
     <ClInclude Include="dialogs\ui_tournamentsdialog.h" />
+    <ClInclude Include="dlgstyle.h" />
     <ClInclude Include="factories.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="historics.h" />
