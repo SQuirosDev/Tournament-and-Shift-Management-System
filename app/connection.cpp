@@ -215,7 +215,7 @@ DbResponse Connection::initTables() {
             "  TEAM_A_ID INTEGER NOT NULL REFERENCES TB_TEAM(ID),"
             "  TEAM_B_ID INTEGER NOT NULL REFERENCES TB_TEAM(ID),"
             "  PHASE TEXT NOT NULL CHECK(PHASE IN ('Grupos', 'Eliminacion')),"
-            "  ROUND INTEGER NOT NULL DEFAULT 1 CHECK(ROUND >= 1),"
+            "  ROUND INTEGER NOT NULL DEFAULT 1 CHECK(ROUND >= 0),"
             "  STATUS TEXT NOT NULL DEFAULT 'Pendiente' CHECK(STATUS IN ('Pendiente', 'Finalizado')),"
             "  WINNER_ID INTEGER REFERENCES TB_TEAM(ID),"
             "  RESULT TEXT CHECK(RESULT IN ('Gana A', 'Gana B', 'Empate', NULL)),"
@@ -976,7 +976,7 @@ DBQueryResponse<Match> Connection::listMatchesByTournament(int tournamentId) {
         }
 
         string sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, QUEUE_POSITION "
             "FROM TB_MATCH WHERE TOURNAMENT_ID = ? ORDER BY QUEUE_POSITION ASC;";
 
         DBQueryResponse<Match> queryResult = executeQuery<Match>(
@@ -1008,7 +1008,7 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
         }
 
         string sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, QUEUE_POSITION "
             "FROM TB_MATCH WHERE TOURNAMENT_ID = ? AND PHASE = ? ORDER BY QUEUE_POSITION ASC;";
 
         DBQueryResponse<Match> queryResult = executeQuery<Match>(
@@ -1035,7 +1035,7 @@ DBQueryResponse<Match> Connection::listMatchesByPhase(int tournamentId, string p
 DBQueryResponse<Match> Connection::obtainMatchById(int id) {
     try {
         string sqlQuery =
-            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, PLAYED_AT, QUEUE_POSITION "
+            "SELECT ID, TOURNAMENT_ID, TEAM_A_ID, TEAM_B_ID, PHASE, ROUND, STATUS, WINNER_ID, RESULT, QUEUE_POSITION "
             "FROM TB_MATCH WHERE ID = ?;";
 
         DBQueryResponse<Match> queryResult = executeQuery<Match>(
@@ -1071,8 +1071,8 @@ DbResponse Connection::updateMatch(int id, string phase, int round, string statu
         }
 
         string sqlQuery =
-            "UPDATE TB_MATCH SET PHASE = ?, ROUND = ?, STATUS = ?, WINNER_ID = ?, RESULT = ?, "
-            "PLAYED_AT = datetime('now') WHERE ID = ?;";
+            "UPDATE TB_MATCH SET PHASE = ?, ROUND = ?, STATUS = ?, WINNER_ID = ?, RESULT = ? "
+            "WHERE ID = ?;";
 
         int resultCode = executeNonQuery(sqlQuery, {
             paramText(phase), paramInt(round), paramText(status),

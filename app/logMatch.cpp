@@ -35,7 +35,7 @@ BackendResponse LogMatch::insert(int tournamentId, int teamAId, int teamBId) {
 BackendQueryResponse<Match> LogMatch::listByTournament(int tournamentId) {
 
     if (tournamentId <= 0) {
-        return { {}, CODE_MATCH_NOT_FOUND, "El ID del partido no es válido." };
+        return { {}, CODE_MATCH_NOT_FOUND, "El ID del torneo no es válido." };
     }
 
     BackendQueryResponse<Match> response =  dbQueryResponseFactory<Match>(connection_.listMatchesByTournament(tournamentId));
@@ -45,7 +45,7 @@ BackendQueryResponse<Match> LogMatch::listByTournament(int tournamentId) {
 BackendQueryResponse<Match> LogMatch::listByPhase(int id, string phase) {
 
     if (id <= 0) {
-        return { {}, CODE_MATCH_NOT_FOUND, "El ID del partido no es válido." };
+        return { {}, CODE_MATCH_NOT_FOUND, "El ID del torneo no es válido." };
     }
 
     if (!isValidName(phase)) {
@@ -80,7 +80,7 @@ BackendResponse LogMatch::update(int id, string phase, int round, string status,
         return response;
     }
 
-    if (status == "Finalizado") {
+    if (match.status == "Finalizado") {
 
         int teamAId = match.teamAId;
         int teamBId = match.teamBId;

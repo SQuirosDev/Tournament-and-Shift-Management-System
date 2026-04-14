@@ -108,6 +108,7 @@
     <ClCompile Include="logGame.cpp" />
     <ClCompile Include="logHistoric.cpp" />
     <ClCompile Include="logMatch.cpp" />
+    <ClCompile Include="logMatchTest.cpp" />
     <ClCompile Include="logPetition.cpp" />
     <ClCompile Include="logPlayer.cpp" />
     <ClCompile Include="logPlayerTest.h" />
@@ -150,6 +151,7 @@
     <ClInclude Include="logGame.h" />
     <ClInclude Include="logHistoric.h" />
     <ClInclude Include="logMatch.h" />
+    <ClInclude Include="logMatchTest.h" />
     <ClInclude Include="logPetition.h" />
     <ClInclude Include="logPlayer.h" />
     <ClInclude Include="logTeam.h" />
