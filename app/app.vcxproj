@@ -112,6 +112,7 @@
     <ClCompile Include="logPlayer.cpp" />
     <ClCompile Include="logPlayerTest.h" />
     <ClCompile Include="logTeam.cpp" />
+    <ClCompile Include="logTeamTest.cpp" />
     <ClCompile Include="logTournament.cpp" />
     <ClCompile Include="queueMatch.cpp" />
     <ClCompile Include="queuePetition.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="logPetition.h" />
     <ClInclude Include="logPlayer.h" />
     <ClInclude Include="logTeam.h" />
+    <ClInclude Include="logTeamTest.h" />
     <ClInclude Include="logTournament.h" />
     <ClInclude Include="matches.h" />
     <ClInclude Include="nodeHistoric.h" />

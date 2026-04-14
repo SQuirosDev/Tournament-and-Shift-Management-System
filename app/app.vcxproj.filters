@@ -127,6 +127,9 @@
     <ClCompile Include="logPlayerTest.h">
       <Filter>Source Files\tests</Filter>
     </ClCompile>
+    <ClCompile Include="logTeamTest.cpp">
+      <Filter>Source Files\tests</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -236,6 +239,9 @@
     </ClInclude>
     <ClInclude Include="dlgstyle.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="logTeamTest.h">
+      <Filter>Source Files\tests</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

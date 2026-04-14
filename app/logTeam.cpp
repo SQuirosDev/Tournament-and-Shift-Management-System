@@ -30,7 +30,7 @@ BackendResponse LogTeam::insert(string name, int tournamentId) {
         return response;
     }
 
-    string newData = "{ \"id\": " + to_string(response.id) + ", \"tournamentId\": " + to_string(0) + ", \"name\": \"" + name + "\", \"tournaments\": " + to_string(0) + ", \"points\": " + to_string(0) + ", \"wins\": " + to_string(0) + ", \"draws\": " + to_string(0) + ", \"losses\": " + to_string(0) + " }";
+    string newData = "{ \"id\": " + to_string(response.id) + ", \"tournamentId\": " + to_string(tournamentId) + ", \"name\": \"" + name + "\", \"tournaments\": " + to_string(0) + ", \"points\": " + to_string(0) + ", \"wins\": " + to_string(0) + ", \"draws\": " + to_string(0) + ", \"losses\": " + to_string(0) + " }";
 
     logHistoric->insert(historicFactory("Insert", "Team", response.id, "{}", newData));
 
@@ -100,61 +100,4 @@ BackendResponse LogTeam::eliminar(int id) {
     logHistoric->insert(historicFactory("Delete", "Team", response.id, previousData, "{}"));
 
     return response;
-}
-
-BackendResponse LogTeam::generate(int tournamentId) {
-    // Obtener jugadores
-    BackendQueryResponse playersResponse = dbQueryResponseFactory(connection_.listAllPlayers());
-    if (playersResponse.code >= 4000 && playersResponse.code < 5000) {
-        return { -1, playersResponse.code, playersResponse.message };
-    }
-
-    vector<Player> playersList = playersResponse.data;
-    if (playersList.size() < 32) {
-        return { -1, CODE_TEAM_INVALID_DATA, "Se requieren minimo 32 jugadores" };
-    }
-
-    // Obtener equipos
-    BackendQueryResponse teamsResponse = dbQueryResponseFactory(connection_.listTeamsByTournament(tournamentId));
-    if (teamsResponse.code >= 4000 && teamsResponse.code < 5000) {
-        return { -1, teamsResponse.code, teamsResponse.message };
-    }
-
-    vector<Team> teamsList = teamsResponse.data;
-    if (teamsList.size() < 8) {
-        return { -1, CODE_TEAM_INVALID_DATA, "Se requieren minimo 8 equipos" };
-    }
-
-    // Mezclar jugadores aleatoriamente
-    // Genera una semilla aleatoria desde el sistema
-    random_device rd;
-    // Inicializa el generador de numeros aleatorios con la semilla
-    mt19937 generator(rd());
-    // Mezcla aleatoriamente el vector de jugadores
-    shuffle(playersList.begin(), playersList.end(), generator);
-
-    int teamIndex = 0;
-    int maxPlayersPerTeam = 4;
-
-    for (int i = 0; i < playersList.size(); i++) {
-        if (teamIndex >= teamsList.size()) {
-            teamIndex = 0;
-        }
-
-        int playersAssigned = i % maxPlayersPerTeam;
-
-        if (playersAssigned == 0 && i != 0) {
-            teamIndex++;
-            if (teamIndex >= teamsList.size()) {
-                teamIndex = 0;
-            }
-        }
-
-        int playerId = playersList[i].id;
-        int teamId = teamsList[teamIndex].id;
-
-        connection_.updatePlayerTeam(playerId, teamId);
-    }
-
-    return { 1, CODE_TEAM_GENERATE, "Equipos generados correctamente" };
 }

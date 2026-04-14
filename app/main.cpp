@@ -4,12 +4,18 @@
 #include "connection.h"
 #include "helpers.h"
 #include "logPlayerTest.h"
+#include "logTeamTest.h"
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
-    logPlayerTest();
+    // ==============
+    // Tests
+    // ==============
+    
+    //logPlayerTest();
+    logTeamTest();
 
     //QApplication a(argc, argv);
     //app window;
