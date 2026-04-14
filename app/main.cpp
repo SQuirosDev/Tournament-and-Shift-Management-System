@@ -19,12 +19,12 @@ int main(int argc, char *argv[])
     //logPlayerTest();
     //logTeamTest();
     //logTournamentTest();
-    logMatchTest();
+    //logMatchTest();
 
-    //QApplication a(argc, argv);
-    //app window;
-    //window.show();
-    //return a.exec();
+    QApplication a(argc, argv);
+    app window;
+    window.show();
+    return a.exec();
 
     //Connection connection;
 
@@ -37,5 +37,5 @@ int main(int argc, char *argv[])
     //    return 1;
     //}
 
-    return 0;
+    //return 0;
 }

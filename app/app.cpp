@@ -21,18 +21,22 @@ app::app(QWidget* parent) : QMainWindow(parent)
     this->setWindowTitle("Sistema de gestión de torneos");
 
     // ── Capa lógica ──────────────────────────────────────────────────────────
+    
     conn_ = new Connection();
-    conn_->open("app_data.db");
+
+    DbResponse dbResponse = conn_->open("app_data.db");
+
+    if (dbResponse.code != CODE_SUCCESS) {
+        QMessageBox::critical(this, "Error", "No se pudo abrir la base de datos");
+    }
+
     logHistoric_ = new LogHistoric(*conn_);
     logTournament_ = new LogTournament(*conn_);
     logTeam_ = new LogTeam(*conn_);
     logPlayer_ = new LogPlayer(*conn_);
     logMatch_ = new LogMatch(*conn_);
     logGame_ = new LogGame(*conn_);
-    logHistoric_->setLogTournament(logTournament_);
-    logHistoric_->setLogTeam(logTeam_);
-    logHistoric_->setLogPlayer(logPlayer_);
-    logHistoric_->setLogMatch(logMatch_);
+
     logTournament_->setLogHistoric(logHistoric_);
     logTeam_->setLogHistoric(logHistoric_);
     logPlayer_->setLogHistoric(logHistoric_);
