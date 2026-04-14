@@ -273,7 +273,7 @@ void app::updateUiState()
     else if (!hasPlayers)
         lblWelcome->setText("Equipos listos. Registra jugadores.");
     else
-        lblWelcome->setText("Panel de control — torneo activo.");
+        lblWelcome->setText("Panel de control");
 }
 
 void app::onPlayersClicked() {}
