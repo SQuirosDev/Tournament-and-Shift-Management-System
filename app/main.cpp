@@ -5,6 +5,7 @@
 #include "helpers.h"
 #include "logPlayerTest.h"
 #include "logTeamTest.h"
+#include "logTournamentTest.h"
 
 using namespace std;
 
@@ -15,7 +16,8 @@ int main(int argc, char *argv[])
     // ==============
     
     //logPlayerTest();
-    logTeamTest();
+    //logTeamTest();
+    logTournamentTest();
 
     //QApplication a(argc, argv);
     //app window;

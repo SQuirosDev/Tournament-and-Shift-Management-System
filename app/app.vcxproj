@@ -114,6 +114,7 @@
     <ClCompile Include="logTeam.cpp" />
     <ClCompile Include="logTeamTest.cpp" />
     <ClCompile Include="logTournament.cpp" />
+    <ClCompile Include="logTournamentTest.cpp" />
     <ClCompile Include="queueMatch.cpp" />
     <ClCompile Include="queuePetition.cpp" />
     <ClCompile Include="sqlite3.c" />
@@ -154,6 +155,7 @@
     <ClInclude Include="logTeam.h" />
     <ClInclude Include="logTeamTest.h" />
     <ClInclude Include="logTournament.h" />
+    <ClInclude Include="logTournamentTest.h" />
     <ClInclude Include="matches.h" />
     <ClInclude Include="nodeHistoric.h" />
     <ClInclude Include="nodeMatch.h" />

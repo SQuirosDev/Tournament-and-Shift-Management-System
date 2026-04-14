@@ -101,7 +101,7 @@ BackendResponse LogTournament::updatePhase(int id, string phase) {
     BackendQueryResponse<Tournament> queryResponse = dbQueryResponseFactory<Tournament>(connection_.obtainTournamentById(id));
    
     if (queryResponse.data.empty()) {
-        return { -1, CODE_TEAM_NOT_FOUND, "torneo no encontrado." };
+        return { -1, CODE_TOURNAMENT_NOT_FOUND, "torneo no encontrado." };
     }
 
     Tournament tournament = queryResponse.data[0];
@@ -159,7 +159,7 @@ BackendResponse LogTournament::eliminar(int id) {
         return response;
     }
 
-    logHistoric->insert(historicFactory("Delete", "Team", response.id, previousData, "{}"));
+    logHistoric->insert(historicFactory("Delete", "Tournament", response.id, previousData, "{}"));
 
     return response;
 }
