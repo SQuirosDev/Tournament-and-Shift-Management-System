@@ -36,12 +36,20 @@ app::app(QWidget* parent) : QMainWindow(parent)
     logPlayer_ = new LogPlayer(*conn_);
     logMatch_ = new LogMatch(*conn_);
     logGame_ = new LogGame(*conn_);
+    //logPetition_ = new LogPetition(*conn_);
 
     logTournament_->setLogHistoric(logHistoric_);
     logTeam_->setLogHistoric(logHistoric_);
     logPlayer_->setLogHistoric(logHistoric_);
     logMatch_->setLogHistoric(logHistoric_);
+    //logPetition_->setLogHistoric(logHistoric_);
     logGame_->setLogHistoric(logHistoric_);
+
+    logHistoric_->setLogTournament(logTournament_);
+    logHistoric_->setLogTeam(logTeam_);
+    logHistoric_->setLogPlayer(logPlayer_);
+    logHistoric_->setLogMatch(logMatch_);
+    //logHistoric_->setLogMatch(logPetition_);
 
     // ── Layout ───────────────────────────────────────────────────────────────
     QWidget* cw = ui.centralWidget;

@@ -107,6 +107,7 @@
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="logGame.cpp" />
     <ClCompile Include="logHistoric.cpp" />
+    <ClCompile Include="logHistoricTest.cpp" />
     <ClCompile Include="logMatch.cpp" />
     <ClCompile Include="logMatchTest.cpp" />
     <ClCompile Include="logPetition.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="json.hpp" />
     <ClInclude Include="logGame.h" />
     <ClInclude Include="logHistoric.h" />
+    <ClInclude Include="logHistoricTest.h" />
     <ClInclude Include="logMatch.h" />
     <ClInclude Include="logMatchTest.h" />
     <ClInclude Include="logPetition.h" />
