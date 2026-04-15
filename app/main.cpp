@@ -7,6 +7,7 @@
 #include "logTeamTest.h"
 #include "logTournamentTest.h"
 #include "logMatchTest.h"
+#include "logPetitionTest.h"
 
 using namespace std;
 
@@ -20,11 +21,12 @@ int main(int argc, char *argv[])
     //logTeamTest();
     //logTournamentTest();
     //logMatchTest();
+    logPetitionTest();
 
-    QApplication a(argc, argv);
-    app window;
-    window.show();
-    return a.exec();
+    //QApplication a(argc, argv);
+    //app window;
+    //window.show();
+    //return a.exec();
 
     //Connection connection;
 
@@ -37,5 +39,5 @@ int main(int argc, char *argv[])
     //    return 1;
     //}
 
-    //return 0;
+    return 0;
 }

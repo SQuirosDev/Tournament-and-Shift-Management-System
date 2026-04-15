@@ -1185,7 +1185,7 @@ DBQueryResponse<Petition> Connection::listPendingPetitions() {
     try {
         string sqlQuery =
             "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
-            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION ASC;";
+            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY ID ASC;";
 
         DBQueryResponse<Petition> queryResult = executeQuery<Petition>(
             sqlQuery, {}, mapPetitionRow, CODE_PETITION_LISTED, "listPendingPetitions"
@@ -1208,11 +1208,12 @@ DBQueryResponse<Petition> Connection::listPendingPetitions() {
     }
 }
 
+// No se usa
 DBQueryResponse<Petition> Connection::obtainNextPetition() {
     try {
         string sqlQuery =
             "SELECT ID, REQUESTER_NAME, TYPE, DESCRIPTION, STATUS, QUEUE_POSITION "
-            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY QUEUE_POSITION ASC LIMIT 1;";
+            "FROM TB_PETITION WHERE STATUS = 'Pendiente' ORDER BY ID ASC LIMIT 1;";
 
         DBQueryResponse<Petition> queryResult = executeQuery<Petition>(
             sqlQuery, {}, mapPetitionRow, CODE_PETITION_LISTED, "obtainNextPetition"

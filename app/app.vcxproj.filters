@@ -136,6 +136,9 @@
     <ClCompile Include="logMatchTest.cpp">
       <Filter>Source Files\tests</Filter>
     </ClCompile>
+    <ClCompile Include="logPetitionTest.cpp">
+      <Filter>Source Files\tests</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite3.h">
@@ -253,6 +256,9 @@
       <Filter>Source Files\tests</Filter>
     </ClInclude>
     <ClInclude Include="logMatchTest.h">
+      <Filter>Source Files\tests</Filter>
+    </ClInclude>
+    <ClInclude Include="logPetitionTest.h">
       <Filter>Source Files\tests</Filter>
     </ClInclude>
   </ItemGroup>

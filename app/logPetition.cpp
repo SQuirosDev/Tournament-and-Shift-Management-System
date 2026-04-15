@@ -28,7 +28,7 @@ BackendResponse LogPetition::insert(string requesterName, string type, string de
         return response;
     }
 
-    string newData = "{ \"id\": " + to_string(response.id) + ", \"requesterName\": \"" + requesterName + "\", \"type\": \"" + type + "\", \"description\": \"" + description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+    string newData = "{ \"id\": " + to_string(response.id) + ", \"requesterName\": \"" + requesterName + "\", \"type\": \"" + type + "\", \"description\": \"" + description + "\", \"response\": \"\", \"status\": \"Pendiente\", \"queuePosition\": 0 }";
 
     logHistoric->insert(historicFactory("Insert", "Petition", response.id, "{}", newData));
 
@@ -53,8 +53,8 @@ BackendResponse LogPetition::update(int id, string responseText) {
 
     Petition petition = queryResponse.data[0];
 
-    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
-    string newData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" + petition.response + "\", \"status\": \"" + petition.status + "\", \"queuePosition\": " + to_string(petition.queuePosition) + " }";
+    string newData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" + responseText + "\", \"status\": \"Atendida\", \"queuePosition\": " + to_string(petition.queuePosition) + " }";
 
 
     BackendResponse response = dbResponseFactory(connection_.updatePetitionStatus(id, responseText, "Atendida"));
@@ -108,7 +108,7 @@ BackendResponse LogPetition::eliminar(int id)
 
     Petition petition = queryResponse.data[0];
 
-    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" "\", \"status\": \"" "\", \"queuePosition\": " " }";
+    string previousData = "{ \"id\": " + to_string(petition.id) + ", \"requesterName\": \"" + petition.requesterName + "\", \"type\": \"" + petition.type + "\", \"description\": \"" + petition.description + "\", \"response\": \"" + petition.response + "\", \"status\": \"" + petition.status + "\", \"queuePosition\": " + to_string(petition.queuePosition) + " }";
 
     BackendResponse response = dbResponseFactory(connection_.deletePetition(id));
 
@@ -116,14 +116,14 @@ BackendResponse LogPetition::eliminar(int id)
         return response;
     }
 
-    logHistoric->insert(historicFactory("Delete", "Player", response.id, previousData, "{}"));
+    logHistoric->insert(historicFactory("Delete", "Petition", response.id, previousData, "{}"));
 
     return response;
 }
 
 int LogPetition::pendingCount() {
 
-    BackendQueryResponse listResponse = dbQueryResponseFactory(connection_.listPendingPetitions());
+    BackendQueryResponse<Petition> listResponse = dbQueryResponseFactory(connection_.listPendingPetitions());
 
     if (listResponse.code >= 4000 && listResponse.code < 5000) {
         return 0;
