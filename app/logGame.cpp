@@ -9,13 +9,7 @@
 
 using namespace std;
 
-LogGame::LogGame(Connection& dbConnection) : connection_(dbConnection) {
-    logHistoric = nullptr;
-}
-
-void LogGame::setLogHistoric(LogHistoric* historic) {
-    logHistoric = historic;
-}
+LogGame::LogGame(Connection& dbConnection) : connection_(dbConnection) {}
 
 // =========================
 // GRUPOS

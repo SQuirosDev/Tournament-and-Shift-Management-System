@@ -43,7 +43,6 @@ app::app(QWidget* parent) : QMainWindow(parent)
     logPlayer_->setLogHistoric(logHistoric_);
     logMatch_->setLogHistoric(logHistoric_);
     //logPetition_->setLogHistoric(logHistoric_);
-    logGame_->setLogHistoric(logHistoric_);
 
     logHistoric_->setLogTournament(logTournament_);
     logHistoric_->setLogTeam(logTeam_);

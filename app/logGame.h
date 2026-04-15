@@ -12,12 +12,9 @@ class LogHistoric;
 class LogGame {
 private:
     Connection& connection_;
-    LogHistoric* logHistoric;
 
 public:
     LogGame(Connection& dbConnection);
-
-    void setLogHistoric(LogHistoric* historic);
 
     // GRUPOS
     BackendResponse generateGroupMatches(int tournamentId);

@@ -9,6 +9,7 @@
 #include "logMatchTest.h"
 #include "logPetitionTest.h"
 #include "logHistoricTest.h"
+#include "logGameTest.h"
 
 using namespace std;
 
@@ -23,7 +24,8 @@ int main(int argc, char *argv[])
     //logTournamentTest();
     //logMatchTest();
     //logPetitionTest();
-    logHistoricTest();
+    //logHistoricTest();
+    logGameTest();
 
     //QApplication a(argc, argv);
     //app window;
