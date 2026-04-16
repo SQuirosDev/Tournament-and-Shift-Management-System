@@ -82,5 +82,5 @@ static const char* DLG_SS_BTN_SIM =
 // Tamaño estándar de todas las ventanas de diálogo
 static const int DLG_W = 580;
 static const int DLG_H = 500;
-static const int DLG_W_WIDE = 720;  // partidos (más botones)
+static const int DLG_W_WIDE = 720;  // partidos (
 static const int DLG_H_WIDE = 560;

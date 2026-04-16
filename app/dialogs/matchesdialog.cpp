@@ -108,7 +108,7 @@ matchesDialog::matchesDialog(LogMatch* logMatch, LogGame* logGame,
     simV->addLayout(simR1); simV->addLayout(simR2);
     bL->addWidget(simWidget);
 
-    // ── Tabs: Partidos | Tabla de posiciones ─────────────────────────────────
+    // ──  Tabla de posiciones ─────────────────────────────────
     QTabWidget* tabs = new QTabWidget();
     tabs->setDocumentMode(false);
 
@@ -301,7 +301,7 @@ void matchesDialog::loadStandings(int tournamentId)
         if (t.tournamentId == tournamentId)
             tourTeams.append(t);
 
-    // Ordenar por puntos descendente (bubble simple)
+    // Ordenar por puntos descendente 
     for (int i = 0; i < tourTeams.size() - 1; i++)
         for (int j = 0; j < tourTeams.size() - 1 - i; j++)
             if (tourTeams[j].points < tourTeams[j + 1].points)

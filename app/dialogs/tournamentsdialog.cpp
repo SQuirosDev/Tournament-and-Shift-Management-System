@@ -10,7 +10,7 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QInputDialog>
 
-// ── Tokens locales (el stylesheet global de app.cpp cubre QComboBox popup) ──
+// ── Tokens locales 
 static const char* SS_HEADER =
 "background:#ffffff; border-bottom:1px solid #e0e0e8;";
 static const char* SS_BODY =
@@ -82,7 +82,7 @@ tournamentsDialog::tournamentsDialog(LogTournament* logTournament, QWidget* pare
     listTournaments_->setSelectionMode(QAbstractItemView::SingleSelection);
     bL->addWidget(listTournaments_, 1);
 
-    // Fila fase (oculta hasta selección)
+    // Fila fase 
     phaseRow_ = new QWidget(); phaseRow_->setStyleSheet(SS_BAR);
     QHBoxLayout* phL = new QHBoxLayout(phaseRow_);
     phL->setContentsMargins(12, 8, 12, 8); phL->setSpacing(8);

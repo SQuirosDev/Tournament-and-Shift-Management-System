@@ -1,5 +1,4 @@
 #pragma once
-
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QLabel>
 #include "ui_app.h"
@@ -10,6 +9,7 @@
 #include "logMatch.h"
 #include "logGame.h"
 #include "logHistoric.h"
+#include "logPetition.h"
 
 class app : public QMainWindow
 {
@@ -32,10 +32,14 @@ private:
     LogPlayer* logPlayer_;
     LogMatch* logMatch_;
     LogGame* logGame_;
+	LogPetition* logPetition_;
 
     // UI
     QLabel* lblWelcome;
+    QPushButton* btnUndo_ = nullptr;
 
+    //Voids
+    void onUndoClicked();
     void updateUiState();
 
 private slots:

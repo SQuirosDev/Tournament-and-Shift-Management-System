@@ -12,6 +12,7 @@ void DialogManager::openModal(QDialog* dlg)
     }
     current_ = dlg;
     dlg->setModal(true);
+
     // center on screen
     QScreen* screen = QApplication::primaryScreen();
     QRect geo = screen ? screen->availableGeometry() : QRect(0,0,800,600);
