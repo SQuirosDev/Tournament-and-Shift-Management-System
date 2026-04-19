@@ -39,7 +39,7 @@ private:
     QPushButton* btnUndo_ = nullptr;
     QPushButton* btnPetitions_ = nullptr;
     
-     /Voids
+    //Voids
     void onPetitionsClicked();
     void onUndoClicked();
     void updateUiState();

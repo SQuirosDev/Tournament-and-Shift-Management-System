@@ -7,7 +7,7 @@
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QLabel>
-#include “logPetition.h”
+#include "logPetition.h"
 
 class petitionsDialog : public QDialog {
 Q_OBJECT
@@ -18,7 +18,7 @@ explicit petitionsDialog(LogPetition* logPetition, QWidget* parent = nullptr);
 private:
 LogPetition* logPetition_;
 
-```
+/*
 // Pestaña "Ver peticiones"
 QListWidget*  listPetitions_;
 QLabel*       lblSubtitle_;
@@ -33,7 +33,7 @@ QTextEdit*    edtDescription_;
 
 void loadPetitions();
 void updateNextInQueue();
-```
+*/
 
 private slots:
 void onAddClicked();
