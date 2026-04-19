@@ -37,8 +37,10 @@ private:
     // UI
     QLabel* lblWelcome;
     QPushButton* btnUndo_ = nullptr;
-
-    //Voids
+    QPushButton* btnPetitions_ = nullptr;
+    
+     /Voids
+    void onPetitionsClicked();
     void onUndoClicked();
     void updateUiState();
 
