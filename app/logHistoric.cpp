@@ -77,7 +77,7 @@ BackendResponse LogHistoric::undo() {
         undoResponse = undoTournament(last);
     }
     else if (last.entityType == "Match") {
-        undoResponse = undoTournament(last);
+        undoResponse = undoMatch(last);
     }
     else {
         return {-1,  CODE_UNDO_NOT_AVAILABLE, "Entidad no soportada" };
