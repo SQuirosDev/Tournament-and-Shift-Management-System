@@ -13,6 +13,7 @@
 #include "dialogs/teamsdialog.h"
 #include "dialogs/playersdialog.h"
 #include "dialogs/matchesdialog.h"
+#include "dialogs/petitionsdialog.h"
 #include "dialogs/dialog_manager.h"
 
 app::app(QWidget* parent) : QMainWindow(parent)
@@ -135,6 +136,21 @@ app::app(QWidget* parent) : QMainWindow(parent)
     root->addLayout(grid);
     root->addStretch();
 
+    // ── Barra inferior: Peticiones (izq) y Undo (der) ───────────────────────
+    btnPetitions_ = new QPushButton("✉  Peticiones", cw);
+    btnPetitions_->setObjectName("btnPetitions");
+    btnPetitions_->setCursor(Qt::PointingHandCursor);
+    btnPetitions_->setFixedHeight(38);
+    btnPetitions_->setMinimumWidth(140);
+    btnPetitions_->setStyleSheet(
+        "QPushButton#btnPetitions{"
+        "  background:#0071e3; color:#ffffff; border:none;"
+        "  border-radius:19px; padding:0 18px;"
+        "  font-size:10pt; font-weight:600;"
+        "}"
+        "QPushButton#btnPetitions:hover{ background:#0077ed; }"
+        "QPushButton#btnPetitions:disabled{ background:#b3d4f5; color:#ffffff; }");
+
     // ── Botón Undo 
     btnUndo_ = new QPushButton("↩  Deshacer", cw);
     btnUndo_->setObjectName("btnUndo");
@@ -152,6 +168,7 @@ app::app(QWidget* parent) : QMainWindow(parent)
 
     QHBoxLayout* bottomBar = new QHBoxLayout();
     bottomBar->setContentsMargins(0, 0, 0, 0);
+    bottomBar->addWidget(btnPetitions_);
     bottomBar->addStretch();
     bottomBar->addWidget(btnUndo_);
     root->addLayout(bottomBar);
@@ -260,6 +277,7 @@ app::app(QWidget* parent) : QMainWindow(parent)
         matchesDialog dlg(logMatch_, logGame_, logTournament_, logTeam_, this);
         DialogManager::openModal(&dlg); updateUiState();
         });
+    connect(btnPetitions_, &QPushButton::clicked, this, &app::onPetitionsClicked);
     connect(btnUndo_, &QPushButton::clicked, this, &app::onUndoClicked);
 
     updateUiState();
@@ -268,7 +286,8 @@ app::app(QWidget* parent) : QMainWindow(parent)
 app::~app()
 {
     delete logGame_; delete logMatch_; delete logPlayer_;
-    delete logTeam_; delete logTournament_; delete logHistoric_; delete conn_;
+    delete logTeam_; delete logTournament_; delete logHistoric_;
+    delete logPetition_; delete conn_;
 }
 
 void app::updateUiState()
@@ -307,6 +326,22 @@ void app::updateUiState()
         lblWelcome->setText("Equipos listos. Registra jugadores.");
     else
         lblWelcome->setText("Panel de control");
+
+    // Actualizar badge de peticiones pendientes
+    if (btnPetitions_ && logPetition_) {
+        int pending = logPetition_->pendingCount();
+        if (pending > 0)
+            btnPetitions_->setText(QString("✉  Peticiones (%1)").arg(pending));
+        else
+            btnPetitions_->setText("✉  Peticiones");
+    }
+}
+
+void app::onPetitionsClicked()
+{
+    petitionsDialog dlg(logPetition_, this);
+    DialogManager::openModal(&dlg);
+    updateUiState();
 }
 
 static QString describeHistoric(const Historic& h)
