@@ -1,5 +1,4 @@
 #include "dialogs/petitionsdialog.h"
-#include <petitionsdialog.h>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>

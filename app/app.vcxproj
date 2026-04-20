@@ -119,7 +119,7 @@
     <ClCompile Include="logTeamTest.cpp" />
     <ClCompile Include="logTournament.cpp" />
     <ClCompile Include="logTournamentTest.cpp" />
-    <ClCompile Include="petitionsdialog.cpp" />
+    <ClCompile Include="dialogs\petitionsdialog.cpp" />
     <ClCompile Include="queueMatch.cpp" />
     <ClCompile Include="queuePetition.cpp" />
     <ClCompile Include="sqlite3.c" />
@@ -170,7 +170,7 @@
     <ClInclude Include="nodeMatch.h" />
     <ClInclude Include="nodePetition.h" />
     <ClInclude Include="petitions.h" />
-    <QtMoc Include="petitionsdialog.h" />
+    <QtMoc Include="dialogs\petitionsdialog.h" />
     <ClInclude Include="players.h" />
     <ClInclude Include="dbQueryResponse.h" />
     <ClInclude Include="queueMatch.h" />
